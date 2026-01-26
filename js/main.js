@@ -159,7 +159,7 @@ class MusController {
     restartGame() {
         this.hideResultModal();
         this.game.piedras = { equipo1: 0, equipo2: 0 };
-        this.game.mano = 0;
+        this.game.manoIndex = 0;
         this.updateScore();
         this.startGame();
     }
@@ -544,7 +544,7 @@ class MusController {
 
     startMusTurnSequence() {
         // El orden de turnos empieza desde la mano
-        const manoIndex = this.game.mano;
+        const manoIndex = this.game.manoIndex;
         const turnOrder = this.game.turnOrder;
 
         // Crear cola de turnos
@@ -668,7 +668,7 @@ class MusController {
         if (this.game.faseActual !== FASES.ENVITE) return;
 
         // El orden de turnos empieza desde la mano
-        const manoIndex = this.game.mano;
+        const manoIndex = this.game.manoIndex;
         const turnOrder = this.game.turnOrder;
 
         // Crear cola de turnos
@@ -785,7 +785,7 @@ class MusController {
         const apostadorTeam = this.game.players[apostadorId].team;
 
         // El primer jugador del equipo contrario (en orden desde mano) debe responder
-        const manoIndex = this.game.mano;
+        const manoIndex = this.game.manoIndex;
         const turnOrder = this.game.turnOrder;
 
         this.turnQueue = [];

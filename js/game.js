@@ -1,6 +1,6 @@
 /**
  * MUS - Juego de cartas tradicional vasco
- * Lógica principal del juego
+ * Logica principal del juego
  */
 
 import { Deck, Card, Hand } from './cards.js';
@@ -61,11 +61,17 @@ class Game {
         // Estado de la ronda
         this.lanceActual = null;
         this.faseActual = null;
-        this.mano = 0; // Indice en turnOrder
+        this.manoIndex = 0; // Indice en turnOrder de quien es mano (rota cada ronda)
         this.postre = 3; // Ultimo en hablar
+        this.currentTurnIndex = 0; // Turno actual relativo a la mano (0-3)
 
         // Estado del mus
         this.musResponses = {};
+        this.musTurnIndex = 0; // Turno actual en la fase de mus (relativo a la mano)
+
+        // Estado del descarte
+        this.descarteTurnIndex = 0; // Turno actual en la fase de descarte
+        this.descarteResponses = {}; // Respuestas de descarte de cada jugador
 
         // Estado del envite actual
         this.enviteActual = {
@@ -73,7 +79,11 @@ class Game {
             apuesta: 0,
             equipoApostador: null,
             ultimaAccion: null,
-            respuestas: {}
+            respuestas: {},
+            pasaron: [],
+            turnoIndex: 0, // Turno actual en el envite
+            esperandoRespuesta: false, // Si estamos esperando respuesta del equipo contrario
+            equipoDebeResponder: null // Equipo que debe responder al envite
         };
 
         // Puntos pendientes de la ronda (se suman al final)
@@ -116,11 +126,59 @@ class Game {
     }
 
     /**
+     * Obtiene el jugador actual en el turno
+     * @returns {string} - ID del jugador actual
+     */
+    getCurrentTurnPlayer() {
+        const absoluteIndex = (this.manoIndex + this.currentTurnIndex) % 4;
+        return this.turnOrder[absoluteIndex];
+    }
+
+    /**
+     * Obtiene el jugador que es mano
+     * @returns {string} - ID del jugador mano
+     */
+    getMano() {
+        return this.turnOrder[this.manoIndex];
+    }
+
+    /**
+     * Avanza al siguiente turno
+     * @returns {string} - ID del siguiente jugador
+     */
+    advanceTurn() {
+        this.currentTurnIndex = (this.currentTurnIndex + 1) % 4;
+        const nextPlayer = this.getCurrentTurnPlayer();
+
+        this.emit('turnChanged', {
+            player: nextPlayer,
+            turnoIndex: this.currentTurnIndex,
+            mano: this.getMano()
+        });
+
+        return nextPlayer;
+    }
+
+    /**
+     * Reinicia el turno al jugador mano
+     */
+    resetTurnToMano() {
+        this.currentTurnIndex = 0;
+        const mano = this.getMano();
+
+        this.emit('turnChanged', {
+            player: mano,
+            turnoIndex: 0,
+            mano: mano
+        });
+    }
+
+    /**
      * Inicia una nueva partida
      */
     startGame() {
         this.piedras = { equipo1: 0, equipo2: 0 };
-        this.mano = 0;
+        this.manoIndex = 0;
         this.ordagoActivo = false;
 
         this.emit('gameStarted', {
@@ -138,12 +196,21 @@ class Game {
         this.puntosPendientes = { equipo1: 0, equipo2: 0 };
         this.lanceActual = null;
         this.ordagoActivo = false;
+        this.currentTurnIndex = 0;
 
         // Actualizar postre (anterior a mano)
-        this.postre = (this.mano + 3) % 4;
+        this.postre = (this.manoIndex + 3) % 4;
+
+        const manoPlayer = this.getMano();
+
+        // Emitir evento de quien es mano
+        this.emit('manoChanged', {
+            mano: manoPlayer,
+            manoIndex: this.manoIndex
+        });
 
         this.emit('roundStarted', {
-            mano: this.turnOrder[this.mano],
+            mano: manoPlayer,
             postre: this.turnOrder[this.postre]
         });
 
@@ -166,7 +233,7 @@ class Game {
         // Repartir 4 cartas a cada jugador en orden desde la mano
         for (let i = 0; i < 4; i++) {
             for (let j = 0; j < 4; j++) {
-                const playerIndex = (this.mano + j) % 4;
+                const playerIndex = (this.manoIndex + j) % 4;
                 const playerId = this.turnOrder[playerIndex];
                 const cards = this.deck.deal(1);
                 if (cards.length > 0) {
@@ -181,11 +248,15 @@ class Game {
     }
 
     /**
-     * Inicia la fase de MUS
+     * Inicia la fase de MUS con turnos secuenciales
      */
     startMusPhase() {
         this.faseActual = FASES.MUS;
         this.musResponses = {};
+        this.musTurnIndex = 0;
+        this.currentTurnIndex = 0;
+
+        const manoPlayer = this.getMano();
 
         this.emit('phaseChanged', {
             fase: FASES.MUS,
@@ -193,18 +264,47 @@ class Game {
         });
 
         this.emit('musPhaseStarted', {
-            turno: this.turnOrder[this.mano]
+            mano: manoPlayer,
+            turno: manoPlayer
+        });
+
+        // Emitir turno inicial
+        this.emit('turnChanged', {
+            player: manoPlayer,
+            turnoIndex: 0,
+            mano: manoPlayer,
+            fase: FASES.MUS
         });
     }
 
     /**
-     * Maneja la decision de un jugador sobre el mus
+     * Obtiene el jugador actual en la fase de mus
+     * @returns {string} - ID del jugador que debe hablar
+     */
+    getMusTurnPlayer() {
+        const absoluteIndex = (this.manoIndex + this.musTurnIndex) % 4;
+        return this.turnOrder[absoluteIndex];
+    }
+
+    /**
+     * Maneja la decision de un jugador sobre el mus (con turnos secuenciales)
      * @param {string} playerId - ID del jugador
      * @param {boolean} wantsMus - true si quiere mus, false si corta
      */
     handleMus(playerId, wantsMus) {
         if (this.faseActual !== FASES.MUS) {
             this.emit('error', { mensaje: 'No estamos en fase de mus' });
+            return false;
+        }
+
+        // Verificar que es el turno del jugador
+        const expectedPlayer = this.getMusTurnPlayer();
+        if (playerId !== expectedPlayer) {
+            this.emit('error', {
+                mensaje: `No es tu turno. Turno de: ${expectedPlayer}`,
+                expected: expectedPlayer,
+                received: playerId
+            });
             return false;
         }
 
@@ -224,21 +324,38 @@ class Game {
             return true;
         }
 
-        // Verificar si todos han respondido
-        const respondieron = Object.keys(this.musResponses).length;
-        if (respondieron === 4) {
+        // Avanzar al siguiente turno en mus
+        this.musTurnIndex++;
+        this.currentTurnIndex = this.musTurnIndex;
+
+        // Verificar si todos han dicho mus
+        if (this.musTurnIndex >= 4) {
             // Todos quieren mus, fase de descarte
             this.startDescartePhase();
+        } else {
+            // Emitir turno del siguiente jugador
+            const nextPlayer = this.getMusTurnPlayer();
+            this.emit('turnChanged', {
+                player: nextPlayer,
+                turnoIndex: this.musTurnIndex,
+                mano: this.getMano(),
+                fase: FASES.MUS
+            });
         }
 
         return true;
     }
 
     /**
-     * Inicia la fase de descarte
+     * Inicia la fase de descarte con turnos secuenciales
      */
     startDescartePhase() {
         this.faseActual = FASES.DESCARTE;
+        this.descarteTurnIndex = 0;
+        this.descarteResponses = {};
+        this.currentTurnIndex = 0;
+
+        const manoPlayer = this.getMano();
 
         this.emit('phaseChanged', {
             fase: FASES.DESCARTE,
@@ -246,18 +363,47 @@ class Game {
         });
 
         this.emit('descartePhaseStarted', {
-            turno: this.turnOrder[this.mano]
+            mano: manoPlayer,
+            turno: manoPlayer
+        });
+
+        // Emitir turno inicial
+        this.emit('turnChanged', {
+            player: manoPlayer,
+            turnoIndex: 0,
+            mano: manoPlayer,
+            fase: FASES.DESCARTE
         });
     }
 
     /**
-     * Maneja el descarte de cartas de un jugador
+     * Obtiene el jugador actual en la fase de descarte
+     * @returns {string} - ID del jugador que debe descartar
+     */
+    getDescarteTurnPlayer() {
+        const absoluteIndex = (this.manoIndex + this.descarteTurnIndex) % 4;
+        return this.turnOrder[absoluteIndex];
+    }
+
+    /**
+     * Maneja el descarte de cartas de un jugador (con turnos secuenciales)
      * @param {string} playerId - ID del jugador
-     * @param {number[]} cardIndices - Indices de las cartas a descartar
+     * @param {number[]} cardIndices - Indices de las cartas a descartar (puede ser vacio)
      */
     handleDescarte(playerId, cardIndices) {
         if (this.faseActual !== FASES.DESCARTE) {
             this.emit('error', { mensaje: 'No estamos en fase de descarte' });
+            return false;
+        }
+
+        // Verificar que es el turno del jugador
+        const expectedPlayer = this.getDescarteTurnPlayer();
+        if (playerId !== expectedPlayer) {
+            this.emit('error', {
+                mensaje: `No es tu turno. Turno de: ${expectedPlayer}`,
+                expected: expectedPlayer,
+                received: playerId
+            });
             return false;
         }
 
@@ -290,10 +436,31 @@ class Game {
             }
         }
 
+        this.descarteResponses[playerId] = cardIndices.length;
+
         this.emit('cardsDiscarded', {
             player: playerId,
             count: descartadas.length
         });
+
+        // Avanzar al siguiente turno en descarte
+        this.descarteTurnIndex++;
+        this.currentTurnIndex = this.descarteTurnIndex;
+
+        // Verificar si todos han descartado
+        if (this.descarteTurnIndex >= 4) {
+            // Todos han descartado, volver a fase de mus
+            this.finishDescarte();
+        } else {
+            // Emitir turno del siguiente jugador
+            const nextPlayer = this.getDescarteTurnPlayer();
+            this.emit('turnChanged', {
+                player: nextPlayer,
+                turnoIndex: this.descarteTurnIndex,
+                mano: this.getMano(),
+                fase: FASES.DESCARTE
+            });
+        }
 
         return true;
     }
@@ -302,6 +469,15 @@ class Game {
      * Finaliza la fase de descarte y vuelve al mus
      */
     finishDescarte() {
+        this.emit('descarteFinished', {
+            descartes: this.descarteResponses
+        });
+
+        // Emitir cartas actualizadas
+        this.emit('cardsDealt', {
+            players: this.players
+        });
+
         this.startMusPhase();
     }
 
@@ -311,13 +487,16 @@ class Game {
     startLances() {
         this.faseActual = FASES.ENVITE;
         this.lanceActual = LANCES.GRANDE;
+        this.currentTurnIndex = 0;
 
-        this.emit('lancesStarted', {});
+        this.emit('lancesStarted', {
+            mano: this.getMano()
+        });
         this.startEnvite(LANCES.GRANDE);
     }
 
     /**
-     * Inicia el envite para un lance
+     * Inicia el envite para un lance con turnos secuenciales
      * @param {string} lance - El lance actual
      */
     startEnvite(lance) {
@@ -337,14 +516,21 @@ class Game {
         }
 
         this.lanceActual = lance;
+        this.currentTurnIndex = 0;
+
         this.enviteActual = {
             lance: lance,
             apuesta: 0,
             equipoApostador: null,
             ultimaAccion: null,
             respuestas: {},
-            pasaron: []
+            pasaron: [],
+            turnoIndex: 0,
+            esperandoRespuesta: false,
+            equipoDebeResponder: null
         };
+
+        const manoPlayer = this.getMano();
 
         this.emit('phaseChanged', {
             fase: FASES.ENVITE,
@@ -353,12 +539,50 @@ class Game {
 
         this.emit('enviteStarted', {
             lance: lance,
-            turno: this.turnOrder[this.mano]
+            mano: manoPlayer,
+            turno: manoPlayer
+        });
+
+        // Emitir turno inicial (mano)
+        this.emit('turnChanged', {
+            player: manoPlayer,
+            turnoIndex: 0,
+            mano: manoPlayer,
+            fase: FASES.ENVITE,
+            lance: lance
         });
     }
 
     /**
-     * Maneja una accion de envite
+     * Obtiene el jugador actual en la fase de envite
+     * @returns {string} - ID del jugador que debe hablar
+     */
+    getEnviteTurnPlayer() {
+        const absoluteIndex = (this.manoIndex + this.enviteActual.turnoIndex) % 4;
+        return this.turnOrder[absoluteIndex];
+    }
+
+    /**
+     * Obtiene el siguiente jugador del equipo que debe responder
+     * @param {string} equipo - Equipo que debe responder
+     * @returns {string|null} - ID del siguiente jugador o null
+     */
+    getNextRespondingPlayer(equipo) {
+        // Buscar el siguiente jugador del equipo que debe responder en orden antihorario
+        for (let i = 0; i < 4; i++) {
+            const absoluteIndex = (this.manoIndex + i) % 4;
+            const playerId = this.turnOrder[absoluteIndex];
+            const player = this.players[playerId];
+
+            if (player.team === equipo && !this.enviteActual.respuestas[playerId]) {
+                return playerId;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Maneja una accion de envite con turnos secuenciales
      * @param {string} playerId - ID del jugador
      * @param {string} action - Accion (paso, envido, ordago, quiero, no_quiero)
      * @param {number} amount - Cantidad apostada (para envido)
@@ -375,92 +599,234 @@ class Game {
             return false;
         }
 
+        // Verificar turno
+        if (this.enviteActual.esperandoRespuesta) {
+            // Estamos esperando respuesta del equipo contrario
+            if (player.team !== this.enviteActual.equipoDebeResponder) {
+                this.emit('error', {
+                    mensaje: `Debe responder el equipo ${this.enviteActual.equipoDebeResponder}`
+                });
+                return false;
+            }
+        } else {
+            // Turno normal secuencial
+            const expectedPlayer = this.getEnviteTurnPlayer();
+            if (playerId !== expectedPlayer) {
+                this.emit('error', {
+                    mensaje: `No es tu turno. Turno de: ${expectedPlayer}`,
+                    expected: expectedPlayer,
+                    received: playerId
+                });
+                return false;
+            }
+        }
+
         const equipoJugador = player.team;
 
         switch (action) {
             case ACCIONES_ENVITE.PASO:
-                this.enviteActual.respuestas[playerId] = 'paso';
-                this.enviteActual.pasaron.push(playerId);
-
-                this.emit('enviteAction', {
-                    player: playerId,
-                    action: 'paso'
-                });
-
-                // Verificar si todos pasaron
-                if (this.todosPasaron()) {
-                    this.resolveLance(this.lanceActual);
-                }
-                break;
+                return this._handlePaso(playerId, equipoJugador);
 
             case ACCIONES_ENVITE.ENVIDO:
-                if (this.enviteActual.apuesta === 0) {
-                    this.enviteActual.apuesta = amount || 2;
-                } else {
-                    this.enviteActual.apuesta += amount || 2;
-                }
-                this.enviteActual.equipoApostador = equipoJugador;
-                this.enviteActual.ultimaAccion = 'envido';
-                this.enviteActual.respuestas[playerId] = 'envido';
-                this.enviteActual.pasaron = []; // Reset pasaron
-
-                this.emit('enviteAction', {
-                    player: playerId,
-                    action: 'envido',
-                    apuesta: this.enviteActual.apuesta
-                });
-                break;
+                return this._handleEnvido(playerId, equipoJugador, amount);
 
             case ACCIONES_ENVITE.ORDAGO:
-                this.enviteActual.apuesta = PIEDRAS_PARA_GANAR;
-                this.enviteActual.equipoApostador = equipoJugador;
-                this.enviteActual.ultimaAccion = 'ordago';
-                this.enviteActual.respuestas[playerId] = 'ordago';
-                this.ordagoActivo = true;
-
-                this.emit('enviteAction', {
-                    player: playerId,
-                    action: 'ordago'
-                });
-                break;
+                return this._handleOrdago(playerId, equipoJugador);
 
             case ACCIONES_ENVITE.QUIERO:
-                this.enviteActual.respuestas[playerId] = 'quiero';
-
-                this.emit('enviteAction', {
-                    player: playerId,
-                    action: 'quiero',
-                    apuesta: this.enviteActual.apuesta
-                });
-
-                // Resolver el lance con la apuesta aceptada
-                this.resolveLance(this.lanceActual);
-                break;
+                return this._handleQuiero(playerId, equipoJugador);
 
             case ACCIONES_ENVITE.NO_QUIERO:
-                this.enviteActual.respuestas[playerId] = 'no_quiero';
+                return this._handleNoQuiero(playerId, equipoJugador);
 
-                this.emit('enviteAction', {
-                    player: playerId,
-                    action: 'no_quiero'
-                });
+            default:
+                this.emit('error', { mensaje: `Accion no valida: ${action}` });
+                return false;
+        }
+    }
 
-                // El equipo apostador gana lo que habia antes del ultimo envite
-                const puntos = Math.max(1, this.enviteActual.apuesta - 2);
-                const equipoGanador = this.enviteActual.equipoApostador;
-                this.puntosPendientes[equipoGanador] += puntos;
+    /**
+     * Maneja la accion PASO
+     */
+    _handlePaso(playerId, equipoJugador) {
+        this.enviteActual.respuestas[playerId] = 'paso';
+        this.enviteActual.pasaron.push(playerId);
 
-                this.emit('lanceResolved', {
+        this.emit('enviteAction', {
+            player: playerId,
+            action: 'paso'
+        });
+
+        // Si estabamos esperando respuesta y pasa, el otro del equipo debe responder
+        if (this.enviteActual.esperandoRespuesta) {
+            const nextResponder = this.getNextRespondingPlayer(this.enviteActual.equipoDebeResponder);
+            if (nextResponder) {
+                this.emit('turnChanged', {
+                    player: nextResponder,
+                    turnoIndex: this.enviteActual.turnoIndex,
+                    mano: this.getMano(),
+                    fase: FASES.ENVITE,
                     lance: this.lanceActual,
-                    ganador: equipoGanador,
-                    puntos: puntos,
-                    razon: 'no_quiero'
+                    esperandoRespuesta: true
                 });
-
-                this.nextLance();
-                break;
+                return true;
+            } else {
+                // Nadie del equipo quiere, es como no_quiero
+                return this._handleNoQuiero(playerId, equipoJugador);
+            }
         }
 
+        // Avanzar turno normal
+        this.enviteActual.turnoIndex++;
+        this.currentTurnIndex = this.enviteActual.turnoIndex;
+
+        // Verificar si todos pasaron
+        if (this.enviteActual.pasaron.length >= 4) {
+            this.resolveLance(this.lanceActual);
+            return true;
+        }
+
+        // Emitir siguiente turno
+        if (this.enviteActual.turnoIndex < 4) {
+            const nextPlayer = this.getEnviteTurnPlayer();
+            this.emit('turnChanged', {
+                player: nextPlayer,
+                turnoIndex: this.enviteActual.turnoIndex,
+                mano: this.getMano(),
+                fase: FASES.ENVITE,
+                lance: this.lanceActual
+            });
+        } else {
+            // Todos han hablado sin envidar, resolver
+            this.resolveLance(this.lanceActual);
+        }
+
+        return true;
+    }
+
+    /**
+     * Maneja la accion ENVIDO
+     */
+    _handleEnvido(playerId, equipoJugador, amount) {
+        if (this.enviteActual.apuesta === 0) {
+            this.enviteActual.apuesta = amount || 2;
+        } else {
+            this.enviteActual.apuesta += amount || 2;
+        }
+        this.enviteActual.equipoApostador = equipoJugador;
+        this.enviteActual.ultimaAccion = 'envido';
+        this.enviteActual.respuestas[playerId] = 'envido';
+        this.enviteActual.pasaron = []; // Reset pasaron
+
+        // Ahora el equipo contrario debe responder
+        const equipoContrario = equipoJugador === 'equipo1' ? 'equipo2' : 'equipo1';
+        this.enviteActual.esperandoRespuesta = true;
+        this.enviteActual.equipoDebeResponder = equipoContrario;
+
+        this.emit('enviteAction', {
+            player: playerId,
+            action: 'envido',
+            apuesta: this.enviteActual.apuesta
+        });
+
+        // Buscar siguiente jugador del equipo contrario que debe responder
+        const nextResponder = this.getNextRespondingPlayer(equipoContrario);
+        if (nextResponder) {
+            this.emit('turnChanged', {
+                player: nextResponder,
+                turnoIndex: this.enviteActual.turnoIndex,
+                mano: this.getMano(),
+                fase: FASES.ENVITE,
+                lance: this.lanceActual,
+                esperandoRespuesta: true,
+                equipoDebeResponder: equipoContrario
+            });
+        }
+
+        return true;
+    }
+
+    /**
+     * Maneja la accion ORDAGO
+     */
+    _handleOrdago(playerId, equipoJugador) {
+        this.enviteActual.apuesta = PIEDRAS_PARA_GANAR;
+        this.enviteActual.equipoApostador = equipoJugador;
+        this.enviteActual.ultimaAccion = 'ordago';
+        this.enviteActual.respuestas[playerId] = 'ordago';
+        this.ordagoActivo = true;
+
+        // El equipo contrario debe responder
+        const equipoContrario = equipoJugador === 'equipo1' ? 'equipo2' : 'equipo1';
+        this.enviteActual.esperandoRespuesta = true;
+        this.enviteActual.equipoDebeResponder = equipoContrario;
+
+        this.emit('enviteAction', {
+            player: playerId,
+            action: 'ordago'
+        });
+
+        // Buscar siguiente jugador del equipo contrario
+        const nextResponder = this.getNextRespondingPlayer(equipoContrario);
+        if (nextResponder) {
+            this.emit('turnChanged', {
+                player: nextResponder,
+                turnoIndex: this.enviteActual.turnoIndex,
+                mano: this.getMano(),
+                fase: FASES.ENVITE,
+                lance: this.lanceActual,
+                esperandoRespuesta: true,
+                equipoDebeResponder: equipoContrario,
+                ordago: true
+            });
+        }
+
+        return true;
+    }
+
+    /**
+     * Maneja la accion QUIERO
+     */
+    _handleQuiero(playerId, equipoJugador) {
+        this.enviteActual.respuestas[playerId] = 'quiero';
+        this.enviteActual.esperandoRespuesta = false;
+
+        this.emit('enviteAction', {
+            player: playerId,
+            action: 'quiero',
+            apuesta: this.enviteActual.apuesta
+        });
+
+        // Resolver el lance con la apuesta aceptada
+        this.resolveLance(this.lanceActual);
+        return true;
+    }
+
+    /**
+     * Maneja la accion NO_QUIERO
+     */
+    _handleNoQuiero(playerId, equipoJugador) {
+        this.enviteActual.respuestas[playerId] = 'no_quiero';
+        this.enviteActual.esperandoRespuesta = false;
+
+        this.emit('enviteAction', {
+            player: playerId,
+            action: 'no_quiero'
+        });
+
+        // El equipo apostador gana lo que habia antes del ultimo envite
+        const puntos = Math.max(1, this.enviteActual.apuesta - 2);
+        const equipoGanador = this.enviteActual.equipoApostador;
+        this.puntosPendientes[equipoGanador] += puntos;
+
+        this.emit('lanceResolved', {
+            lance: this.lanceActual,
+            ganador: equipoGanador,
+            puntos: puntos,
+            razon: 'no_quiero'
+        });
+
+        this.nextLance();
         return true;
     }
 
@@ -584,8 +950,8 @@ class Game {
             return;
         }
 
-        // Rotar mano
-        this.mano = (this.mano + 1) % 4;
+        // Rotar mano al siguiente jugador en orden antihorario
+        this.manoIndex = (this.manoIndex + 1) % 4;
 
         // Nueva ronda
         this.startRound();
@@ -680,7 +1046,7 @@ class Game {
 
         // Empezamos desde la mano
         for (let i = 0; i < 4; i++) {
-            const posicion = (this.mano + i) % 4;
+            const posicion = (this.manoIndex + i) % 4;
             const playerId = this.turnOrder[posicion];
             const player = this.players[playerId];
             const valores = this.getGrandeValues(player.hand);
@@ -712,7 +1078,7 @@ class Game {
         let mejorValores = null;
 
         for (let i = 0; i < 4; i++) {
-            const posicion = (this.mano + i) % 4;
+            const posicion = (this.manoIndex + i) % 4;
             const playerId = this.turnOrder[posicion];
             const player = this.players[playerId];
             const valores = this.getChicaValues(player.hand);
@@ -738,9 +1104,6 @@ class Game {
      * Considera que 3=Rey (12) y 2=As (1) para comparacion de valores
      * @param {Card[]} hand - Mano del jugador
      * @returns {object} - { tipo: 'duples'|'medias'|'par'|null, valores: number[], puntos: number }
-     *   - tipo: tipo de pares (null si no tiene)
-     *   - valores: array con los valores de los pares (convertidos para MUS)
-     *   - puntos: 1 para par, 2 para medias, 3 para duples
      */
     detectarPares(hand) {
         // Convertir valores para comparacion MUS (3=Rey, 2=As)
@@ -869,7 +1232,7 @@ class Game {
         let mejorPares = { tipo: null, valores: [], puntos: 0 };
 
         for (let i = 0; i < 4; i++) {
-            const posicion = (this.mano + i) % 4;
+            const posicion = (this.manoIndex + i) % 4;
             const playerId = this.turnOrder[posicion];
             const player = this.players[playerId];
             const pares = this.detectarPares(player.hand);
@@ -929,8 +1292,6 @@ class Game {
      * Calcula el juego de una mano
      * @param {Card[]} hand - Mano del jugador
      * @returns {object} - { tieneJuego: boolean, valor: number }
-     *   - tieneJuego: true si la suma >= 31
-     *   - valor: suma total de la mano
      */
     calcularJuego(hand) {
         const valor = this.getValorJuego(hand);
@@ -983,7 +1344,7 @@ class Game {
         let mejorJerarquia = -1;
 
         for (let i = 0; i < 4; i++) {
-            const posicion = (this.mano + i) % 4;
+            const posicion = (this.manoIndex + i) % 4;
             const playerId = this.turnOrder[posicion];
             const player = this.players[playerId];
             const valor = this.getValorJuego(player.hand);
@@ -1012,7 +1373,7 @@ class Game {
         let mejorValor = -1;
 
         for (let i = 0; i < 4; i++) {
-            const posicion = (this.mano + i) % 4;
+            const posicion = (this.manoIndex + i) % 4;
             const playerId = this.turnOrder[posicion];
             const player = this.players[playerId];
             const valor = this.getValorJuego(player.hand);
@@ -1038,10 +1399,14 @@ class Game {
             piedras: this.piedras,
             lanceActual: this.lanceActual,
             faseActual: this.faseActual,
-            mano: this.turnOrder[this.mano],
+            mano: this.getMano(),
+            manoIndex: this.manoIndex,
             postre: this.turnOrder[this.postre],
+            currentTurnPlayer: this.getCurrentTurnPlayer(),
+            currentTurnIndex: this.currentTurnIndex,
             enviteActual: this.enviteActual,
-            puntosPendientes: this.puntosPendientes
+            puntosPendientes: this.puntosPendientes,
+            turnOrder: this.turnOrder
         };
     }
 
@@ -1060,10 +1425,22 @@ class Game {
      * @returns {boolean}
      */
     isPlayerTurn(playerId) {
-        // Implementar logica de turnos segun la fase
-        return true; // Simplificado por ahora
+        if (this.faseActual === FASES.MUS) {
+            return playerId === this.getMusTurnPlayer();
+        }
+        if (this.faseActual === FASES.DESCARTE) {
+            return playerId === this.getDescarteTurnPlayer();
+        }
+        if (this.faseActual === FASES.ENVITE) {
+            if (this.enviteActual.esperandoRespuesta) {
+                const player = this.players[playerId];
+                return player && player.team === this.enviteActual.equipoDebeResponder;
+            }
+            return playerId === this.getEnviteTurnPlayer();
+        }
+        return false;
     }
 }
 
 // Exportar para uso como modulo ES6
-export { Game, LANCES, FASES, ACCIONES_ENVITE, PIEDRAS_PARA_GANAR };
+export { Game, LANCES, FASES, ACCIONES_ENVITE, PIEDRAS_PARA_GANAR, TURN_ORDER };
