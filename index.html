@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Juego de cartas MUS español para 4 jugadores">
+    <title>MUS - Juego de Cartas Español</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="mus-game">
+        <!-- Cabecera del juego -->
+        <header class="game-header">
+            <h1 class="game-title">MUS</h1>
+            <div class="lance-indicator">
+                <span class="lance-label">Lance:</span>
+                <span class="lance-current" id="lance-actual">Grande</span>
+            </div>
+        </header>
+
+        <!-- Marcador -->
+        <section class="scoreboard">
+            <div class="score-team score-team--nosotros">
+                <span class="score-team-name">Nosotros</span>
+                <div class="score-piedras">
+                    <span class="score-value" id="piedras-nosotros">0</span>
+                    <span class="score-max">/40</span>
+                </div>
+                <div class="score-bar">
+                    <div class="score-bar-fill" id="bar-nosotros" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="score-team score-team--ellos">
+                <span class="score-team-name">Ellos</span>
+                <div class="score-piedras">
+                    <span class="score-value" id="piedras-ellos">0</span>
+                    <span class="score-max">/40</span>
+                </div>
+                <div class="score-bar">
+                    <div class="score-bar-fill" id="bar-ellos" style="width: 0%"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Mesa de juego -->
+        <main class="game-table">
+            <!-- Jugador Pareja (arriba) -->
+            <section class="player-area player-area--top player-area--pareja">
+                <div class="player-info">
+                    <span class="player-name">Pareja</span>
+                    <span class="player-status" id="status-pareja"></span>
+                </div>
+                <div class="player-hand player-hand--hidden" id="mano-pareja">
+                    <div class="card card--back" data-position="0"></div>
+                    <div class="card card--back" data-position="1"></div>
+                    <div class="card card--back" data-position="2"></div>
+                    <div class="card card--back" data-position="3"></div>
+                </div>
+            </section>
+
+            <!-- Jugador Rival 1 (izquierda) -->
+            <section class="player-area player-area--left player-area--rival1">
+                <div class="player-info">
+                    <span class="player-name">Rival 1</span>
+                    <span class="player-status" id="status-rival1"></span>
+                </div>
+                <div class="player-hand player-hand--hidden player-hand--vertical" id="mano-rival1">
+                    <div class="card card--back" data-position="0"></div>
+                    <div class="card card--back" data-position="1"></div>
+                    <div class="card card--back" data-position="2"></div>
+                    <div class="card card--back" data-position="3"></div>
+                </div>
+            </section>
+
+            <!-- Zona central -->
+            <section class="table-center">
+                <!-- Cartas jugadas -->
+                <div class="played-cards" id="cartas-jugadas">
+                    <div class="played-card played-card--pareja" id="jugada-pareja"></div>
+                    <div class="played-card played-card--rival1" id="jugada-rival1"></div>
+                    <div class="played-card played-card--rival2" id="jugada-rival2"></div>
+                    <div class="played-card played-card--jugador" id="jugada-jugador"></div>
+                </div>
+
+                <!-- Zona de descarte (para pedir mus) -->
+                <div class="discard-area" id="zona-descarte">
+                    <span class="discard-label">Descarte</span>
+                    <div class="discard-pile" id="pila-descarte"></div>
+                </div>
+
+                <!-- Apuestas actuales -->
+                <div class="current-bet" id="apuesta-actual">
+                    <span class="bet-label">Envite:</span>
+                    <span class="bet-value" id="valor-envite">-</span>
+                </div>
+            </section>
+
+            <!-- Jugador Rival 2 (derecha) -->
+            <section class="player-area player-area--right player-area--rival2">
+                <div class="player-info">
+                    <span class="player-name">Rival 2</span>
+                    <span class="player-status" id="status-rival2"></span>
+                </div>
+                <div class="player-hand player-hand--hidden player-hand--vertical" id="mano-rival2">
+                    <div class="card card--back" data-position="0"></div>
+                    <div class="card card--back" data-position="1"></div>
+                    <div class="card card--back" data-position="2"></div>
+                    <div class="card card--back" data-position="3"></div>
+                </div>
+            </section>
+
+            <!-- Jugador Principal (abajo) -->
+            <section class="player-area player-area--bottom player-area--jugador">
+                <div class="player-hand" id="mano-jugador">
+                    <div class="card card--selectable" data-position="0" id="carta-jugador-0"></div>
+                    <div class="card card--selectable" data-position="1" id="carta-jugador-1"></div>
+                    <div class="card card--selectable" data-position="2" id="carta-jugador-2"></div>
+                    <div class="card card--selectable" data-position="3" id="carta-jugador-3"></div>
+                </div>
+                <div class="player-info">
+                    <span class="player-name">Jugador</span>
+                    <span class="player-status" id="status-jugador"></span>
+                </div>
+            </section>
+        </main>
+
+        <!-- Panel de controles -->
+        <section class="controls-panel">
+            <!-- Controles de MUS -->
+            <div class="controls-group controls-group--mus">
+                <button type="button" class="btn btn--mus" id="btn-mus">
+                    <span class="btn-text">MUS</span>
+                </button>
+                <button type="button" class="btn btn--cortar" id="btn-cortar">
+                    <span class="btn-text">CORTAR</span>
+                </button>
+            </div>
+
+            <!-- Controles de envite -->
+            <div class="controls-group controls-group--envite">
+                <button type="button" class="btn btn--paso" id="btn-paso">
+                    <span class="btn-text">PASO</span>
+                </button>
+                <button type="button" class="btn btn--envido" id="btn-envido">
+                    <span class="btn-text">ENVIDO</span>
+                </button>
+                <button type="button" class="btn btn--ordago" id="btn-ordago">
+                    <span class="btn-text">ORDAGO</span>
+                </button>
+            </div>
+
+            <!-- Controles adicionales -->
+            <div class="controls-group controls-group--extra">
+                <button type="button" class="btn btn--quiero" id="btn-quiero" disabled>
+                    <span class="btn-text">QUIERO</span>
+                </button>
+                <button type="button" class="btn btn--no-quiero" id="btn-no-quiero" disabled>
+                    <span class="btn-text">NO QUIERO</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Indicador de turno -->
+        <div class="turn-indicator" id="indicador-turno">
+            <span class="turn-text">Tu turno</span>
+        </div>
+
+        <!-- Modal de mensajes y resultados -->
+        <div class="modal" id="modal" aria-hidden="true">
+            <div class="modal-overlay" id="modal-overlay"></div>
+            <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+                <header class="modal-header">
+                    <h2 class="modal-title" id="modal-title">Mensaje</h2>
+                    <button type="button" class="modal-close" id="modal-close" aria-label="Cerrar">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </header>
+                <div class="modal-body" id="modal-body">
+                    <!-- Contenido dinámico -->
+                </div>
+                <footer class="modal-footer">
+                    <button type="button" class="btn btn--primary" id="modal-accept">Aceptar</button>
+                </footer>
+            </div>
+        </div>
+
+        <!-- Modal de resultado de partida -->
+        <div class="modal modal--result" id="modal-resultado" aria-hidden="true">
+            <div class="modal-overlay"></div>
+            <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="resultado-title">
+                <header class="modal-header">
+                    <h2 class="modal-title" id="resultado-title">Fin de la partida</h2>
+                </header>
+                <div class="modal-body">
+                    <div class="result-display">
+                        <span class="result-winner" id="resultado-ganador"></span>
+                        <div class="result-scores">
+                            <div class="result-score">
+                                <span class="result-team">Nosotros</span>
+                                <span class="result-points" id="resultado-nosotros">0</span>
+                            </div>
+                            <div class="result-score">
+                                <span class="result-team">Ellos</span>
+                                <span class="result-points" id="resultado-ellos">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <footer class="modal-footer">
+                    <button type="button" class="btn btn--primary" id="btn-nueva-partida">Nueva Partida</button>
+                </footer>
+            </div>
+        </div>
+
+        <!-- Modal de ordago -->
+        <div class="modal modal--ordago" id="modal-ordago" aria-hidden="true">
+            <div class="modal-overlay"></div>
+            <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="ordago-title">
+                <header class="modal-header">
+                    <h2 class="modal-title" id="ordago-title">ORDAGO!</h2>
+                </header>
+                <div class="modal-body">
+                    <p class="ordago-message" id="ordago-mensaje">El rival ha cantado ordago</p>
+                </div>
+                <footer class="modal-footer modal-footer--ordago">
+                    <button type="button" class="btn btn--quiero" id="ordago-quiero">QUIERO</button>
+                    <button type="button" class="btn btn--no-quiero" id="ordago-no-quiero">NO QUIERO</button>
+                </footer>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
