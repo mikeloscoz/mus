@@ -502,8 +502,9 @@ class Game {
     startEnvite(lance) {
         // Verificar si el lance aplica
         if (lance === LANCES.PARES && !this.hayPares()) {
+            this.lanceActual = LANCES.PARES; // Update so nextLance can advance past it
             this.emit('lanceSkipped', { lance: LANCES.PARES, razon: 'Nadie tiene pares' });
-            this.nextLance();
+            // NO llamar nextLance() - main.js controla el timing
             return;
         }
 
@@ -516,11 +517,13 @@ class Game {
         }
 
         this.lanceActual = lance;
+        this.faseActual = FASES.ENVITE;
         this.currentTurnIndex = 0;
 
         this.enviteActual = {
             lance: lance,
             apuesta: 0,
+            apuestaAnterior: 0,
             equipoApostador: null,
             ultimaAccion: null,
             respuestas: {},
@@ -599,27 +602,16 @@ class Game {
             return false;
         }
 
-        // Verificar turno
+        // Verificar turno: solo validar equipo si estamos esperando respuesta
         if (this.enviteActual.esperandoRespuesta) {
-            // Estamos esperando respuesta del equipo contrario
             if (player.team !== this.enviteActual.equipoDebeResponder) {
                 this.emit('error', {
                     mensaje: `Debe responder el equipo ${this.enviteActual.equipoDebeResponder}`
                 });
                 return false;
             }
-        } else {
-            // Turno normal secuencial
-            const expectedPlayer = this.getEnviteTurnPlayer();
-            if (playerId !== expectedPlayer) {
-                this.emit('error', {
-                    mensaje: `No es tu turno. Turno de: ${expectedPlayer}`,
-                    expected: expectedPlayer,
-                    received: playerId
-                });
-                return false;
-            }
         }
+        // El orden de turnos lo controla main.js via turnQueue
 
         const equipoJugador = player.team;
 
@@ -676,28 +668,8 @@ class Game {
             }
         }
 
-        // Avanzar turno normal
-        this.enviteActual.turnoIndex++;
-        this.currentTurnIndex = this.enviteActual.turnoIndex;
-
-        // Verificar si todos pasaron
+        // Si todos han pasado sin que haya envite, resolver el lance automaticamente
         if (this.enviteActual.pasaron.length >= 4) {
-            this.resolveLance(this.lanceActual);
-            return true;
-        }
-
-        // Emitir siguiente turno
-        if (this.enviteActual.turnoIndex < 4) {
-            const nextPlayer = this.getEnviteTurnPlayer();
-            this.emit('turnChanged', {
-                player: nextPlayer,
-                turnoIndex: this.enviteActual.turnoIndex,
-                mano: this.getMano(),
-                fase: FASES.ENVITE,
-                lance: this.lanceActual
-            });
-        } else {
-            // Todos han hablado sin envidar, resolver
             this.resolveLance(this.lanceActual);
         }
 
@@ -708,6 +680,11 @@ class Game {
      * Maneja la accion ENVIDO
      */
     _handleEnvido(playerId, equipoJugador, amount) {
+        if (this.ordagoActivo) {
+            this.emit('error', { mensaje: 'No se puede envidar con ordago activo' });
+            return false;
+        }
+        this.enviteActual.apuestaAnterior = this.enviteActual.apuesta;
         if (this.enviteActual.apuesta === 0) {
             this.enviteActual.apuesta = amount || 2;
         } else {
@@ -720,6 +697,12 @@ class Game {
 
         // Ahora el equipo contrario debe responder
         const equipoContrario = equipoJugador === 'equipo1' ? 'equipo2' : 'equipo1';
+        // Clear responses of the responding team so they get a fresh chance after raise
+        for (const pid in this.players) {
+            if (this.players[pid].team === equipoContrario) {
+                delete this.enviteActual.respuestas[pid];
+            }
+        }
         this.enviteActual.esperandoRespuesta = true;
         this.enviteActual.equipoDebeResponder = equipoContrario;
 
@@ -750,6 +733,11 @@ class Game {
      * Maneja la accion ORDAGO
      */
     _handleOrdago(playerId, equipoJugador) {
+        if (this.ordagoActivo) {
+            this.emit('error', { mensaje: 'Ya hay un ordago activo' });
+            return false;
+        }
+        this.enviteActual.apuestaAnterior = this.enviteActual.apuesta;
         this.enviteActual.apuesta = PIEDRAS_PARA_GANAR;
         this.enviteActual.equipoApostador = equipoJugador;
         this.enviteActual.ultimaAccion = 'ordago';
@@ -758,6 +746,12 @@ class Game {
 
         // El equipo contrario debe responder
         const equipoContrario = equipoJugador === 'equipo1' ? 'equipo2' : 'equipo1';
+        // Clear responses of the responding team
+        for (const pid in this.players) {
+            if (this.players[pid].team === equipoContrario) {
+                delete this.enviteActual.respuestas[pid];
+            }
+        }
         this.enviteActual.esperandoRespuesta = true;
         this.enviteActual.equipoDebeResponder = equipoContrario;
 
@@ -806,16 +800,19 @@ class Game {
      * Maneja la accion NO_QUIERO
      */
     _handleNoQuiero(playerId, equipoJugador) {
+        this.faseActual = FASES.RESOLUCION; // Marcar como resuelto para evitar race conditions
         this.enviteActual.respuestas[playerId] = 'no_quiero';
         this.enviteActual.esperandoRespuesta = false;
+        this.ordagoActivo = false; // Reset ordago si lo habia
 
         this.emit('enviteAction', {
             player: playerId,
             action: 'no_quiero'
         });
 
-        // El equipo apostador gana lo que habia antes del ultimo envite
-        const puntos = Math.max(1, this.enviteActual.apuesta - 2);
+        // Deje: si hubo subida previa, el que subio se lleva la apuesta anterior
+        // Si fue el primer envido, deje = 1 piedra (regla oficial)
+        const puntos = this.enviteActual.apuestaAnterior > 0 ? this.enviteActual.apuestaAnterior : 1;
         const equipoGanador = this.enviteActual.equipoApostador;
         this.puntosPendientes[equipoGanador] += puntos;
 
@@ -826,7 +823,7 @@ class Game {
             razon: 'no_quiero'
         });
 
-        this.nextLance();
+        // NO llamar nextLance() aqui - main.js controla el timing
         return true;
     }
 
@@ -842,6 +839,8 @@ class Game {
      * @param {string} lance - El lance a resolver
      */
     resolveLance(lance) {
+        // Guard: prevent double-resolution
+        if (this.faseActual === FASES.RESOLUCION) return;
         this.faseActual = FASES.RESOLUCION;
 
         let ganador = null;
@@ -861,8 +860,8 @@ class Game {
             case LANCES.PARES:
                 const resultadoPares = this.resolverPares();
                 ganador = resultadoPares.ganador;
-                // Pares: 1 par, 2 medias, 3 duples + envites
-                puntos = resultadoPares.puntosPares;
+                // Pares: sumar pares de AMBOS jugadores del equipo ganador (regla oficial)
+                puntos = this._getPuntosParesEquipo(ganador);
                 if (this.enviteActual.apuesta > 0) {
                     puntos += this.enviteActual.apuesta;
                 }
@@ -870,8 +869,8 @@ class Game {
 
             case LANCES.JUEGO:
                 ganador = this.resolverJuego();
-                // Juego: 2 piedras base + envites
-                puntos = 2;
+                // Juego de 31 = 3 piedras, resto de juego = 2 piedras (regla oficial)
+                puntos = this._getMejorValorJuegoDelEquipo(ganador) === 31 ? 3 : 2;
                 if (this.enviteActual.apuesta > 0) {
                     puntos += this.enviteActual.apuesta;
                 }
@@ -891,19 +890,23 @@ class Game {
             this.puntosPendientes[ganador] += puntos;
         }
 
+        const ordagoAceptado = this.ordagoActivo && this.enviteActual.ultimaAccion === 'ordago';
+
         this.emit('lanceResolved', {
             lance: lance,
             ganador: ganador,
-            puntos: puntos
+            puntos: puntos,
+            ordagoAceptado: ordagoAceptado
         });
 
-        // Si hay ordago y se acepto, terminar la ronda
-        if (this.ordagoActivo && this.enviteActual.ultimaAccion === 'ordago') {
+        // Si hay ordago aceptado, terminar la ronda inmediatamente
+        if (ordagoAceptado) {
             this.finishRoundWithOrdago(ganador);
             return;
         }
 
-        this.nextLance();
+        // NO llamar nextLance() aqui - main.js controla el timing
+        // main.js llamara a game.nextLance() despues de mostrar el resultado
     }
 
     /**
@@ -928,7 +931,8 @@ class Game {
     }
 
     /**
-     * Finaliza la ronda y suma puntos
+     * Finaliza la ronda y suma puntos.
+     * Does NOT auto-start the next round — the UI calls continueAfterRound().
      */
     finishRound() {
         // Sumar puntos pendientes
@@ -947,9 +951,14 @@ class Game {
                 ganador: ganador,
                 piedras: this.piedras
             });
-            return;
         }
+    }
 
+    /**
+     * Called by the UI after the user dismisses the round summary.
+     * Rotates mano and starts the next round.
+     */
+    continueAfterRound() {
         // Rotar mano al siguiente jugador en orden antihorario
         this.manoIndex = (this.manoIndex + 1) % 4;
 
@@ -1385,6 +1394,41 @@ class Game {
         }
 
         return mejorJugador ? this.players[mejorJugador].team : null;
+    }
+
+    /**
+     * Suma los puntos de pares de ambos jugadores de un equipo (regla oficial)
+     * Par=1, Medias=2, Duples=3 por jugador
+     * @param {string} equipo - ID del equipo
+     * @returns {number} - Total de puntos de pares del equipo
+     */
+    _getPuntosParesEquipo(equipo) {
+        let total = 0;
+        for (const playerId in this.players) {
+            if (this.players[playerId].team === equipo) {
+                const pares = this.detectarPares(this.players[playerId].hand);
+                if (pares.tipo) {
+                    total += pares.puntos;
+                }
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Obtiene el mejor valor de juego de un equipo (para scoring de juego de 31)
+     * @param {string} equipo - ID del equipo
+     * @returns {number} - Mejor valor de juego del equipo
+     */
+    _getMejorValorJuegoDelEquipo(equipo) {
+        let mejorValor = 0;
+        for (const playerId in this.players) {
+            if (this.players[playerId].team === equipo) {
+                const valor = this.getValorJuego(this.players[playerId].hand);
+                if (valor > mejorValor) mejorValor = valor;
+            }
+        }
+        return mejorValor;
     }
 
     // ==================== UTILIDADES ====================

@@ -228,6 +228,32 @@
                 </footer>
             </div>
         </div>
+
+        <!-- Modal de resumen de ronda -->
+        <div class="modal modal--resumen" id="modal-resumen" aria-hidden="true">
+            <div class="modal-overlay"></div>
+            <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="resumen-title">
+                <header class="modal-header">
+                    <h2 class="modal-title" id="resumen-title">Recuento</h2>
+                </header>
+                <div class="modal-body">
+                    <table id="resumen-table" class="resumen-table">
+                        <thead>
+                            <tr>
+                                <th>Lance</th>
+                                <th>Ganador</th>
+                                <th>Piedras</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resumen-body"></tbody>
+                        <tfoot id="resumen-footer"></tfoot>
+                    </table>
+                </div>
+                <footer class="modal-footer">
+                    <button type="button" class="btn btn--primary" id="btn-continuar">Continuar</button>
+                </footer>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts -->

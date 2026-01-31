@@ -24,6 +24,12 @@ class MusController {
         this.turnQueue = [];
         this.processingTurn = false;
 
+        // Generation counter: increments on each lance transition to invalidate stale setTimeout callbacks
+        this.lanceGeneration = 0;
+
+        // Accumulated lance results for end-of-round summary
+        this.lanceResults = [];
+
         this.init();
     }
 
@@ -97,7 +103,13 @@ class MusController {
             // Grupos de controles
             grupoMus: document.querySelector('.controls-group--mus'),
             grupoEnvite: document.querySelector('.controls-group--envite'),
-            grupoExtra: document.querySelector('.controls-group--extra')
+            grupoExtra: document.querySelector('.controls-group--extra'),
+
+            // Modal de resumen de ronda
+            modalResumen: document.getElementById('modal-resumen'),
+            resumenBody: document.getElementById('resumen-body'),
+            resumenFooter: document.getElementById('resumen-footer'),
+            btnContinuar: document.getElementById('btn-continuar')
         };
     }
 
@@ -116,6 +128,9 @@ class MusController {
         // Modal
         this.elements.modalAccept?.addEventListener('click', () => this.hideModal());
         this.elements.btnNuevaPartida?.addEventListener('click', () => this.restartGame());
+
+        // Resumen de ronda
+        this.elements.btnContinuar?.addEventListener('click', () => this.onContinuarClick());
     }
 
     createGame() {
@@ -319,71 +334,23 @@ class MusController {
         cardEl.className = 'card';
         cardEl.dataset.position = index;
 
+        const img = document.createElement('img');
+        img.className = 'card-img';
+        img.draggable = false;
+
         if (!faceUp) {
             cardEl.classList.add('card--back');
-            cardEl.innerHTML = '<span class="card-back-text">MUS</span>';
-            return cardEl;
+            img.src = 'modelos/reverso.png';
+            img.alt = 'Carta boca abajo';
+        } else {
+            cardEl.classList.add('card--front');
+            const valorStr = card.valor.toString().padStart(2, '0');
+            img.src = `modelos/${valorStr}-${card.palo}.png`;
+            img.alt = `${card.valor} de ${card.palo}`;
         }
 
-        // Carta boca arriba
-        cardEl.classList.add(`card--${card.palo}`);
-        cardEl.classList.add('card--front');
-
-        const valorDisplay = this.getValorDisplay(card.valor);
-        const paloSvg = this.getPaloSymbol(card.palo);
-        const paloSmall = this.getPaloSymbolSmall(card.palo);
-        const figuraDisplay = this.getFiguraDisplay(card.valor);
-
-        cardEl.innerHTML = `
-            <div class="card-corner card-corner--top">
-                <span class="card-value">${valorDisplay}</span>
-                <span class="card-suit-small">${paloSmall}</span>
-            </div>
-            <div class="card-center">${figuraDisplay || paloSvg}</div>
-            <div class="card-corner card-corner--bottom">
-                <span class="card-value">${valorDisplay}</span>
-                <span class="card-suit-small">${paloSmall}</span>
-            </div>
-        `;
-
+        cardEl.appendChild(img);
         return cardEl;
-    }
-
-    getValorDisplay(valor) {
-        const displays = { 1: 'As', 10: 'S', 11: 'C', 12: 'R' };
-        return displays[valor] || valor.toString();
-    }
-
-    getFiguraDisplay(valor) {
-        // Devuelve representacion especial para figuras, o null para cartas normales
-        const figuras = {
-            10: `<span class="card-figura">S</span><span class="card-figura-label">Sota</span>`,
-            11: `<span class="card-figura">C</span><span class="card-figura-label">Caballo</span>`,
-            12: `<span class="card-figura">R</span><span class="card-figura-label">Rey</span>`
-        };
-        return figuras[valor] || null;
-    }
-
-    getPaloSymbol(palo) {
-        // SVGs de la baraja espanola
-        const svgs = {
-            oros: `<svg viewBox="0 0 24 24" class="suit-icon suit-icon--oros"><circle cx="12" cy="12" r="9" fill="#DAA520" stroke="#B8860B" stroke-width="1.5"/><circle cx="12" cy="12" r="5" fill="#FFD700" stroke="#DAA520" stroke-width="1"/><circle cx="12" cy="12" r="1.5" fill="#B8860B"/></svg>`,
-            copas: `<svg viewBox="0 0 24 24" class="suit-icon suit-icon--copas"><path d="M7 4 C7 4 5 4 5 8 C5 12 8 13 8 13 L8 17 L6 17 L6 19 L18 19 L18 17 L16 17 L16 13 C16 13 19 12 19 8 C19 4 17 4 17 4 Z" fill="#C41E3A" stroke="#8B0000" stroke-width="0.8"/><ellipse cx="12" cy="8" rx="5" ry="4" fill="#E8384F" opacity="0.4"/></svg>`,
-            espadas: `<svg viewBox="0 0 24 24" class="suit-icon suit-icon--espadas"><path d="M12 2 L12 16 M9 18 L15 18 M12 16 L12 20 M12 2 C12 2 6 6 6 10 C6 13 9 14 12 16 C15 14 18 13 18 10 C18 6 12 2 12 2Z" fill="#2F4F8F" stroke="#1a2a4f" stroke-width="0.8"/><line x1="8" y1="6" x2="16" y2="6" stroke="#4a6faf" stroke-width="1.2"/></svg>`,
-            bastos: `<svg viewBox="0 0 24 24" class="suit-icon suit-icon--bastos"><rect x="10" y="2" width="4" height="18" rx="2" fill="#228B22" stroke="#145214" stroke-width="0.8"/><ellipse cx="12" cy="4" rx="3.5" ry="2.5" fill="#2EA82E" stroke="#145214" stroke-width="0.6"/><line x1="10" y1="8" x2="14" y2="8" stroke="#145214" stroke-width="0.6"/><line x1="10" y1="12" x2="14" y2="12" stroke="#145214" stroke-width="0.6"/></svg>`
-        };
-        return svgs[palo] || palo[0].toUpperCase();
-    }
-
-    getPaloSymbolSmall(palo) {
-        // Simbolos Unicode simplificados para las esquinas
-        const symbols = {
-            oros: '\u2B24',    // circulo negro (moneda)
-            copas: '\u2615',   // taza (copa)
-            espadas: '\u2694', // espadas cruzadas
-            bastos: '\u2663'   // trebol (garrote)
-        };
-        return symbols[palo] || palo[0].toUpperCase();
     }
 
     updateScore() {
@@ -444,6 +411,12 @@ class MusController {
                     if (this.elements.btnQuiero) this.elements.btnQuiero.disabled = false;
                     if (this.elements.btnNoQuiero) this.elements.btnNoQuiero.disabled = false;
                 }
+                // Mostrar opciones de subida (envido/ordago) salvo si hay ordago activo
+                if (!this.game.ordagoActivo && isHumanTurn) {
+                    if (this.elements.grupoEnvite) {
+                        this.elements.grupoEnvite.style.display = 'flex';
+                    }
+                }
                 break;
             case 'none':
                 break;
@@ -454,10 +427,15 @@ class MusController {
         const statusEl = this.getStatusElement(playerId);
         if (statusEl) {
             statusEl.textContent = status;
-            // Animar el status
-            statusEl.classList.remove('status-animate');
-            void statusEl.offsetWidth; // Trigger reflow
-            statusEl.classList.add('status-animate');
+            if (status) {
+                statusEl.classList.add('speech-bubble--visible');
+                statusEl.classList.remove('status-animate');
+                void statusEl.offsetWidth; // Trigger reflow
+                statusEl.classList.add('status-animate');
+            } else {
+                statusEl.classList.remove('speech-bubble--visible');
+                statusEl.classList.remove('status-animate');
+            }
         }
     }
 
@@ -465,6 +443,85 @@ class MusController {
         ['player', 'partner', 'rival1', 'rival2'].forEach(p => {
             this.updatePlayerStatus(p, '');
         });
+    }
+
+    /**
+     * Sistema de HABLAR: ejecuta una secuencia de "frases" de jugadores en orden,
+     * con un delay entre cada una para que se aprecie el flujo del juego.
+     * @param {Array<{playerId: string, text: string}>} speeches - Lista de frases en orden
+     * @param {Function} callback - Funcion a ejecutar cuando termina la secuencia
+     * @param {number} delay - Delay entre frases en ms (default 800)
+     */
+    speakSequence(speeches, callback, delay = 1000) {
+        this.clearAllStatus();
+        let index = 0;
+        const gen = this.lanceGeneration;
+
+        const speakNext = () => {
+            if (this.lanceGeneration !== gen) return; // Stale, bail out
+            if (index >= speeches.length) {
+                // Esperar un momento extra al final para que se lea la ultima frase
+                setTimeout(() => {
+                    if (this.lanceGeneration !== gen) return;
+                    if (callback) callback();
+                }, delay);
+                return;
+            }
+
+            const { playerId, text } = speeches[index];
+
+            // Resaltar el jugador que habla
+            this.highlightSpeaker(playerId);
+            this.updatePlayerStatus(playerId, text);
+
+            index++;
+            setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
+                speakNext();
+            }, delay);
+        };
+
+        speakNext();
+    }
+
+    /**
+     * Resalta brevemente al jugador que esta hablando
+     */
+    highlightSpeaker(playerId) {
+        // Quitar resaltado de habla de todos
+        ['player', 'partner', 'rival1', 'rival2'].forEach(p => {
+            const nameEl = this.getPlayerNameElement(p);
+            if (nameEl) nameEl.classList.remove('player-name--speaking');
+        });
+
+        // Resaltar al que habla
+        const nameEl = this.getPlayerNameElement(playerId);
+        if (nameEl) nameEl.classList.add('player-name--speaking');
+    }
+
+    clearSpeakerHighlight() {
+        ['player', 'partner', 'rival1', 'rival2'].forEach(p => {
+            const nameEl = this.getPlayerNameElement(p);
+            if (nameEl) nameEl.classList.remove('player-name--speaking');
+        });
+    }
+
+    /**
+     * Obtiene el orden de turnos empezando desde la mano actual
+     */
+    getTurnOrderFromMano() {
+        const manoIndex = this.game.manoIndex;
+        const turnOrder = this.game.turnOrder;
+        const order = [];
+        for (let i = 0; i < 4; i++) {
+            const playerIndex = (manoIndex + i) % 4;
+            order.push(turnOrder[playerIndex]);
+        }
+        return order;
+    }
+
+    randomPhrase(phrases) {
+        return phrases[Math.floor(Math.random() * phrases.length)];
     }
 
     showTurnIndicator(show) {
@@ -540,8 +597,11 @@ class MusController {
 
     onRoundStarted(data) {
         console.log('[MUS] Nueva ronda - Mano:', data.mano);
+        this.lanceGeneration++; // Invalidate any stale callbacks from previous round
         this.selectedCards.clear();
         this.clearAllStatus();
+        this.clearSpeakerHighlight();
+        this.lanceResults = [];
 
         // Actualizar indicador de mano
         this.updateManoIndicator(data.mano);
@@ -570,6 +630,7 @@ class MusController {
     onMusPhaseStarted(data) {
         console.log('[MUS] Fase de MUS iniciada - Turno:', data.turno);
         this.clearAllStatus();
+        this.clearSpeakerHighlight();
 
         // Iniciar turno desde la mano
         this.startMusTurnSequence();
@@ -595,6 +656,7 @@ class MusController {
         if (this.game.faseActual !== FASES.MUS) return;
         if (this.turnQueue.length === 0) return;
 
+        const gen = this.lanceGeneration;
         const playerId = this.turnQueue.shift();
         this.setCurrentTurn(playerId);
 
@@ -606,17 +668,25 @@ class MusController {
             // Turno de la IA - procesar con delay
             this.showButtonGroup('none');
             setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
                 if (this.game.faseActual !== FASES.MUS) return;
 
                 const hand = this.convertHandForAI(this.game.players[playerId].hand);
                 const wantsMus = this.aiPlayers[playerId].decideMus(hand);
 
-                this.updatePlayerStatus(playerId, wantsMus ? 'Mus' : '¡Corto!');
+                const musPhrase = wantsMus
+                    ? this.randomPhrase(['Mus', 'Mus...', 'Venga, mus'])
+                    : this.randomPhrase(['¡Corto!', 'No hay mus', 'Corto']);
+                this.highlightSpeaker(playerId);
+                this.updatePlayerStatus(playerId, musPhrase);
                 this.game.handleMus(playerId, wantsMus);
 
                 // Si no corto, continuar con el siguiente turno
                 if (wantsMus && this.game.faseActual === FASES.MUS) {
-                    setTimeout(() => this.processNextMusTurn(), 500);
+                    setTimeout(() => {
+                        if (this.lanceGeneration !== gen) return;
+                        this.processNextMusTurn();
+                    }, 1000);
                 }
             }, this.getAIDelay());
         }
@@ -644,57 +714,100 @@ class MusController {
     }
 
     onEnviteStarted(data) {
-        console.log('[MUS] Envite iniciado:', data.lance);
+        this.lanceGeneration++;
+        const gen = this.lanceGeneration;
+
+        console.log('[MUS] Envite iniciado:', data.lance, '(gen:', gen, ')');
         this.updateLanceDisplay(data.lance);
-        this.clearAllStatus();
 
         if (this.elements.valorEnvite) {
             this.elements.valorEnvite.textContent = '-';
         }
 
-        // Detectar y mostrar quien tiene pares/juego antes del lance
-        if (data.lance === LANCES.PARES) {
-            this.detectarYMostrarPares();
-        } else if (data.lance === LANCES.JUEGO || data.lance === LANCES.PUNTO) {
-            this.detectarYMostrarJuego();
-        }
+        // Anunciar el lance con mensaje grande y visible
+        const lanceNames = { grande: 'GRANDE', chica: 'CHICA', pares: 'PARES', juego: 'JUEGO', punto: 'PUNTO' };
+        this.showInfoMessage(`--- ${lanceNames[data.lance] || data.lance} ---`, 2000);
 
-        // Iniciar secuencia de turnos para envite
-        setTimeout(() => this.startEnviteTurnSequence(), data.lance === LANCES.GRANDE ? 500 : 2000);
+        const startTurnSequence = () => {
+            if (this.lanceGeneration !== gen) return;
+            this.clearAllStatus();
+            setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
+                this.startEnviteTurnSequence();
+            }, 500);
+        };
+
+        // Pausa para que se vea el nombre del lance, luego anuncios si aplica
+        setTimeout(() => {
+            if (this.lanceGeneration !== gen) return;
+
+            if (data.lance === LANCES.PARES) {
+                this.detectarYMostrarPares().then(startTurnSequence);
+            } else if (data.lance === LANCES.JUEGO || data.lance === LANCES.PUNTO) {
+                this.detectarYMostrarJuego().then(startTurnSequence);
+            } else {
+                // Grande y Chica: directamente a turnos
+                startTurnSequence();
+            }
+        }, 1500);
     }
 
+    /**
+     * Cada jugador "habla" en orden desde la mano anunciando si tiene pares o no.
+     * Devuelve una Promise que se resuelve cuando toda la secuencia termina.
+     */
     detectarYMostrarPares() {
-        const jugadoresConPares = [];
+        return new Promise(resolve => {
+            const order = this.getTurnOrderFromMano();
+            const speeches = [];
 
-        for (const playerId of ['player', 'partner', 'rival1', 'rival2']) {
-            const pares = this.game.getPares(this.game.players[playerId].hand);
-            if (pares.tipo) {
-                jugadoresConPares.push(this.getPlayerName(playerId));
+            for (const playerId of order) {
+                const pares = this.game.getPares(this.game.players[playerId].hand);
+                let text;
+                if (!pares.tipo) {
+                    text = 'No hay';
+                } else if (pares.tipo === 'par') {
+                    text = 'Pares';
+                } else if (pares.tipo === 'medias') {
+                    text = 'Medias';
+                } else if (pares.tipo === 'duples') {
+                    text = 'Duples';
+                }
+                speeches.push({ playerId, text });
             }
-        }
 
-        if (jugadoresConPares.length > 0) {
-            this.showInfoMessage(`Tienen pares: ${jugadoresConPares.join(', ')}`);
-        } else {
-            this.showInfoMessage('Nadie tiene pares');
-        }
+            this.speakSequence(speeches, () => {
+                this.clearSpeakerHighlight();
+                resolve();
+            });
+        });
     }
 
+    /**
+     * Cada jugador "habla" en orden desde la mano anunciando si tiene juego o no.
+     * Devuelve una Promise que se resuelve cuando toda la secuencia termina.
+     */
     detectarYMostrarJuego() {
-        const jugadoresConJuego = [];
+        return new Promise(resolve => {
+            const order = this.getTurnOrderFromMano();
+            const speeches = [];
 
-        for (const playerId of ['player', 'partner', 'rival1', 'rival2']) {
-            const valor = this.game.getValorJuego(this.game.players[playerId].hand);
-            if (valor >= 31) {
-                jugadoresConJuego.push(`${this.getPlayerName(playerId)} (${valor})`);
+            for (const playerId of order) {
+                const valor = this.game.getValorJuego(this.game.players[playerId].hand);
+                let text;
+                if (valor >= 31) {
+                    text = 'Sí';
+                } else {
+                    text = 'No';
+                }
+                speeches.push({ playerId, text });
             }
-        }
 
-        if (jugadoresConJuego.length > 0) {
-            this.showInfoMessage(`Tienen juego: ${jugadoresConJuego.join(', ')}`);
-        } else {
-            this.showInfoMessage('Nadie tiene juego - Se juega a PUNTO');
-        }
+            this.speakSequence(speeches, () => {
+                this.clearSpeakerHighlight();
+                resolve();
+            });
+        });
     }
 
     startEnviteTurnSequence() {
@@ -711,22 +824,35 @@ class MusController {
             this.turnQueue.push(turnOrder[playerIndex]);
         }
 
+        // Filtrar jugadores no elegibles en lances de PARES y JUEGO
+        const lance = this.game.lanceActual;
+        if (lance === LANCES.PARES) {
+            this.turnQueue = this.turnQueue.filter(playerId =>
+                this.game.getPares(this.game.players[playerId].hand).tipo !== null
+            );
+        } else if (lance === LANCES.JUEGO) {
+            this.turnQueue = this.turnQueue.filter(playerId =>
+                this.game.getValorJuego(this.game.players[playerId].hand) >= 31
+            );
+        }
+
         // Iniciar primer turno
         this.processNextEnviteTurn();
     }
 
     processNextEnviteTurn() {
+        // Verificar que seguimos en fase de envite
         if (this.game.faseActual !== FASES.ENVITE) return;
+
+        const gen = this.lanceGeneration;
+
+        // Si la cola esta vacia, todos han hablado - resolver lance
         if (this.turnQueue.length === 0) {
-            // Todos pasaron, resolver lance
-            if (this.game.enviteActual.pasaron.length === 4) {
-                this.game.resolveLance(this.game.lanceActual);
-            }
+            this.game.resolveLance(this.game.lanceActual);
             return;
         }
 
         const playerId = this.turnQueue[0]; // Peek, no shift aun
-        this.setCurrentTurn(playerId);
 
         // Verificar si este jugador ya paso
         if (this.game.enviteActual.pasaron.includes(playerId)) {
@@ -734,6 +860,8 @@ class MusController {
             this.processNextEnviteTurn();
             return;
         }
+
+        this.setCurrentTurn(playerId);
 
         // Verificar si hay apuesta pendiente del equipo contrario
         const playerTeam = this.game.players[playerId].team;
@@ -756,6 +884,7 @@ class MusController {
             this.showButtonGroup('none');
 
             setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
                 if (this.game.faseActual !== FASES.ENVITE) return;
 
                 this.processAIEnviteTurn(playerId, hayApuestaPendiente);
@@ -764,6 +893,10 @@ class MusController {
     }
 
     processAIEnviteTurn(playerId, hayApuestaPendiente) {
+        // Guard: verify we're still in envite phase
+        if (this.game.faseActual !== FASES.ENVITE) return;
+
+        const gen = this.lanceGeneration;
         const lance = this.game.lanceActual;
         const currentBet = this.game.enviteActual.apuesta;
 
@@ -777,24 +910,64 @@ class MusController {
 
         let action = this.convertAIActionToGame(decision.action);
 
-        // Si hay apuesta pendiente, la IA debe responder
-        if (hayApuestaPendiente) {
-            // La IA solo puede querer, no querer, o subir
+        // Si hay ordago activo, solo quiero o no_quiero
+        if (this.game.ordagoActivo) {
+            if (action !== ACCIONES_ENVITE.QUIERO && action !== ACCIONES_ENVITE.NO_QUIERO) {
+                // Si queria subir/ordago, probablemente quiere aceptar
+                action = (action === ACCIONES_ENVITE.ENVIDO || action === ACCIONES_ENVITE.ORDAGO)
+                    ? ACCIONES_ENVITE.QUIERO
+                    : ACCIONES_ENVITE.NO_QUIERO;
+            }
+        } else if (hayApuestaPendiente) {
+            // Si pasa, comprobar si hay companero que pueda responder
             if (action === ACCIONES_ENVITE.PASO) {
-                action = ACCIONES_ENVITE.NO_QUIERO;
+                const playerTeam = this.game.players[playerId].team;
+                const teammateInQueue = this.turnQueue.some(
+                    (pid, idx) => idx > 0 && this.game.players[pid]?.team === playerTeam
+                        && !this.game.enviteActual.pasaron.includes(pid)
+                );
+                if (!teammateInQueue) {
+                    action = ACCIONES_ENVITE.NO_QUIERO;
+                }
             }
         }
 
-        // Mostrar status de la IA
+        // Mostrar status de la IA - frases variadas
         let statusText = '';
         switch(action) {
-            case ACCIONES_ENVITE.PASO: statusText = 'Paso'; break;
-            case ACCIONES_ENVITE.ENVIDO: statusText = `Envido ${decision.amount || 2}`; break;
-            case ACCIONES_ENVITE.ORDAGO: statusText = '¡ORDAGO!'; break;
-            case ACCIONES_ENVITE.QUIERO: statusText = 'Quiero'; break;
-            case ACCIONES_ENVITE.NO_QUIERO: statusText = 'No quiero'; break;
+            case ACCIONES_ENVITE.PASO:
+                statusText = this.randomPhrase(['Paso', 'Paso...', 'Nada']);
+                break;
+            case ACCIONES_ENVITE.ENVIDO:
+                if (this.game.enviteActual.apuesta > 0) {
+                    statusText = `¡${decision.amount || 2} más!`;
+                } else {
+                    statusText = 'Envido';
+                }
+                break;
+            case ACCIONES_ENVITE.ORDAGO:
+                statusText = this.randomPhrase(['¡ORDAGO!', '¡Órdago va!', '¡Órdago!']);
+                break;
+            case ACCIONES_ENVITE.QUIERO:
+                statusText = this.randomPhrase(['Quiero', '¡Quiero!', 'Va, quiero']);
+                break;
+            case ACCIONES_ENVITE.NO_QUIERO:
+                statusText = this.randomPhrase(['No quiero', 'No...', 'Me retiro']);
+                break;
         }
+        this.highlightSpeaker(playerId);
         this.updatePlayerStatus(playerId, statusText);
+
+        // For quiero/no_quiero, delay handleEnvite so the speech bubble stays visible
+        // before resolveLance → clearAllStatus hides it
+        if (action === ACCIONES_ENVITE.QUIERO || action === ACCIONES_ENVITE.NO_QUIERO) {
+            setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
+                this.game.handleEnvite(playerId, action, decision.amount);
+                this.turnQueue.shift();
+            }, 1500);
+            return;
+        }
 
         this.game.handleEnvite(playerId, action, decision.amount);
 
@@ -808,16 +981,19 @@ class MusController {
             this.reorganizeTurnQueueForResponse(playerId);
         }
 
-        // Continuar con siguiente turno despues de un breve delay
+        // Continuar con siguiente turno despues de un delay para que se lea la frase
         if (this.game.faseActual === FASES.ENVITE) {
-            setTimeout(() => this.processNextEnviteTurn(), 500);
+            setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
+                this.processNextEnviteTurn();
+            }, 1000);
         }
     }
 
     reorganizeTurnQueueForResponse(apostadorId) {
         const apostadorTeam = this.game.players[apostadorId].team;
 
-        // El primer jugador del equipo contrario (en orden desde mano) debe responder
+        // Ambos jugadores del equipo contrario pueden responder (en orden desde mano)
         const manoIndex = this.game.manoIndex;
         const turnOrder = this.game.turnOrder;
 
@@ -827,10 +1003,9 @@ class MusController {
             const pId = turnOrder[playerIndex];
             const pTeam = this.game.players[pId].team;
 
-            // Solo añadir jugadores del equipo contrario que no hayan pasado
+            // Añadir jugadores del equipo contrario que no hayan pasado
             if (pTeam !== apostadorTeam && !this.game.enviteActual.pasaron.includes(pId)) {
                 this.turnQueue.push(pId);
-                break; // Solo necesitamos uno para responder
             }
         }
     }
@@ -852,16 +1027,47 @@ class MusController {
     }
 
     onLanceResolved(data) {
-        const ganadorNombre = data.ganador === 'equipo1' ? 'Nosotros' : 'Ellos';
-        console.log(`[MUS] ${data.lance}: ${ganadorNombre} gana ${data.puntos} piedras`);
+        this.lanceGeneration++;
+        const gen = this.lanceGeneration;
 
-        // NO mostrar las cartas de la IA - solo mostrar mensaje
-        this.showInfoMessage(`${data.lance.toUpperCase()}: ${ganadorNombre} +${data.puntos}`, 2000);
+        const ganadorNombre = data.ganador === 'equipo1' ? 'Nosotros' : 'Ellos';
+        console.log(`[MUS] ${data.lance}: ${ganadorNombre} gana ${data.puntos} piedras (gen: ${gen})`);
+
+        // Accumulate result for end-of-round summary
+        this.lanceResults.push({
+            lance: data.lance,
+            ganador: data.ganador,
+            puntos: data.puntos
+        });
+
+        this.clearAllStatus();
+        this.clearSpeakerHighlight();
+        this.showButtonGroup('none');
+
+        // Si fue ordago aceptado, game.js ya maneja el fin de partida
+        if (data.ordagoAceptado) return;
+
+        // Advance to next lance after a short delay
+        setTimeout(() => {
+            if (this.lanceGeneration !== gen) return;
+            this.game.nextLance();
+        }, 1000);
     }
 
     onLanceSkipped(data) {
-        console.log('[MUS] Lance saltado:', data.lance, '-', data.razon);
-        this.showInfoMessage(data.razon, 2000);
+        this.lanceGeneration++;
+        const gen = this.lanceGeneration;
+
+        console.log('[MUS] Lance saltado:', data.lance, '-', data.razon, '(gen:', gen, ')');
+        this.clearAllStatus();
+        this.clearSpeakerHighlight();
+        this.showInfoMessage(data.razon, 1800);
+
+        // Pausa antes de avanzar al siguiente lance
+        setTimeout(() => {
+            if (this.lanceGeneration !== gen) return;
+            this.game.nextLance();
+        }, 2000);
     }
 
     onRoundFinished(data) {
@@ -869,6 +1075,85 @@ class MusController {
         this.updateScore();
         this.showButtonGroup('none');
         this.currentTurn = null;
+
+        // If there's a winner (game over), don't show summary — the game over modal will show
+        if (this.game.checkWinner()) return;
+
+        // Reveal all cards face-up
+        const players = this.game.players;
+        this.renderPlayerHand('player', players.player.hand, true);
+        this.renderPlayerHand('partner', players.partner.hand, true);
+        this.renderPlayerHand('rival1', players.rival1.hand, true);
+        this.renderPlayerHand('rival2', players.rival2.hand, true);
+
+        // Build and show round summary
+        this.showResumenModal(data);
+    }
+
+    showResumenModal(data) {
+        const lanceNames = { grande: 'GRANDE', chica: 'CHICA', pares: 'PARES', juego: 'JUEGO', punto: 'PUNTO' };
+
+        // Build table body
+        let bodyHtml = '';
+        let totalNosotros = 0;
+        let totalEllos = 0;
+
+        for (const result of this.lanceResults) {
+            const lanceName = lanceNames[result.lance] || result.lance;
+            const ganadorNombre = result.ganador === 'equipo1' ? 'Nosotros' : 'Ellos';
+            const ganadorClass = result.ganador === 'equipo1' ? 'resumen-nosotros' : 'resumen-ellos';
+
+            if (result.ganador === 'equipo1') {
+                totalNosotros += result.puntos;
+            } else {
+                totalEllos += result.puntos;
+            }
+
+            bodyHtml += `<tr>
+                <td>${lanceName}</td>
+                <td class="${ganadorClass}">${ganadorNombre}</td>
+                <td>${result.puntos}</td>
+            </tr>`;
+        }
+
+        if (this.elements.resumenBody) {
+            this.elements.resumenBody.innerHTML = bodyHtml;
+        }
+
+        // Build footer with totals
+        if (this.elements.resumenFooter) {
+            this.elements.resumenFooter.innerHTML = `
+                <tr class="resumen-totals">
+                    <td>TOTAL</td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr class="resumen-totals">
+                    <td>Nosotros</td>
+                    <td class="resumen-nosotros">${totalNosotros}</td>
+                    <td></td>
+                </tr>
+                <tr class="resumen-totals">
+                    <td>Ellos</td>
+                    <td class="resumen-ellos">${totalEllos}</td>
+                    <td></td>
+                </tr>`;
+        }
+
+        if (this.elements.modalResumen) {
+            this.elements.modalResumen.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    hideResumenModal() {
+        if (this.elements.modalResumen) {
+            this.elements.modalResumen.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    onContinuarClick() {
+        this.hideResumenModal();
+        this.game.continueAfterRound();
     }
 
     onGameOver(data) {
@@ -882,22 +1167,11 @@ class MusController {
     }
 
     onParesDetectados(data) {
-        // Evento opcional del game.js
-        if (data.jugadores && data.jugadores.length > 0) {
-            const nombres = data.jugadores.map(p => this.getPlayerName(p));
-            this.showInfoMessage(`Tienen pares: ${nombres.join(', ')}`);
-        } else {
-            this.showInfoMessage('Nadie tiene pares');
-        }
+        // Se maneja ahora via detectarYMostrarPares() con speech secuencial
     }
 
     onJuegoDetectado(data) {
-        // Evento opcional del game.js
-        if (data.jugadores && data.jugadores.length > 0) {
-            this.showInfoMessage(`Tienen juego: ${data.jugadores.map(p => this.getPlayerName(p)).join(', ')}`);
-        } else {
-            this.showInfoMessage('Nadie tiene juego - Se juega a PUNTO');
-        }
+        // Se maneja ahora via detectarYMostrarJuego() con speech secuencial
     }
 
     // ==================== ACCIONES DEL JUGADOR ====================
@@ -918,12 +1192,17 @@ class MusController {
         if (!this.waitingForHuman || this.currentTurn !== 'player') return;
 
         this.waitingForHuman = false;
+        this.highlightSpeaker('player');
         this.updatePlayerStatus('player', 'Mus');
         this.game.handleMus('player', true);
 
         // Continuar con el siguiente turno
         if (this.game.faseActual === FASES.MUS) {
-            setTimeout(() => this.processNextMusTurn(), 500);
+            const gen = this.lanceGeneration;
+            setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
+                this.processNextMusTurn();
+            }, 1000);
         }
     }
 
@@ -931,6 +1210,7 @@ class MusController {
         if (!this.waitingForHuman || this.currentTurn !== 'player') return;
 
         this.waitingForHuman = false;
+        this.highlightSpeaker('player');
         this.updatePlayerStatus('player', '¡Corto!');
         this.game.handleMus('player', false);
     }
@@ -940,11 +1220,17 @@ class MusController {
 
         this.waitingForHuman = false;
         this.showButtonGroup('none');
+        this.highlightSpeaker('player');
+        this.updatePlayerStatus('player', 'Paso');
         this.game.handleEnvite('player', ACCIONES_ENVITE.PASO);
 
         // Quitar de la cola y continuar
         this.turnQueue.shift();
-        setTimeout(() => this.processNextEnviteTurn(), 500);
+        const gen = this.lanceGeneration;
+        setTimeout(() => {
+            if (this.lanceGeneration !== gen) return;
+            this.processNextEnviteTurn();
+        }, 1000);
     }
 
     onEnvidoClick() {
@@ -952,12 +1238,20 @@ class MusController {
 
         this.waitingForHuman = false;
         this.showButtonGroup('none');
+        this.highlightSpeaker('player');
+        const currentBet = this.game.enviteActual.apuesta;
+        const statusText = currentBet > 0 ? '¡2 más!' : 'Envido';
+        this.updatePlayerStatus('player', statusText);
         this.game.handleEnvite('player', ACCIONES_ENVITE.ENVIDO, 2);
 
         // Quitar de la cola y reorganizar para respuesta
         this.turnQueue.shift();
         this.reorganizeTurnQueueForResponse('player');
-        setTimeout(() => this.processNextEnviteTurn(), 500);
+        const gen = this.lanceGeneration;
+        setTimeout(() => {
+            if (this.lanceGeneration !== gen) return;
+            this.processNextEnviteTurn();
+        }, 1000);
     }
 
     onOrdagoClick() {
@@ -965,12 +1259,18 @@ class MusController {
 
         this.waitingForHuman = false;
         this.showButtonGroup('none');
+        this.highlightSpeaker('player');
+        this.updatePlayerStatus('player', '¡ORDAGO!');
         this.game.handleEnvite('player', ACCIONES_ENVITE.ORDAGO);
 
         // Quitar de la cola y reorganizar para respuesta
         this.turnQueue.shift();
         this.reorganizeTurnQueueForResponse('player');
-        setTimeout(() => this.processNextEnviteTurn(), 500);
+        const gen = this.lanceGeneration;
+        setTimeout(() => {
+            if (this.lanceGeneration !== gen) return;
+            this.processNextEnviteTurn();
+        }, 1000);
     }
 
     onQuieroClick() {
@@ -978,6 +1278,8 @@ class MusController {
 
         this.waitingForHuman = false;
         this.showButtonGroup('none');
+        this.highlightSpeaker('player');
+        this.updatePlayerStatus('player', '¡Quiero!');
         this.game.handleEnvite('player', ACCIONES_ENVITE.QUIERO);
     }
 
@@ -986,6 +1288,8 @@ class MusController {
 
         this.waitingForHuman = false;
         this.showButtonGroup('none');
+        this.highlightSpeaker('player');
+        this.updatePlayerStatus('player', 'No quiero');
         this.game.handleEnvite('player', ACCIONES_ENVITE.NO_QUIERO);
     }
 
@@ -1021,7 +1325,8 @@ class MusController {
         const team = this.game.players[playerId].team;
         return {
             marcadorPropio: team === 'equipo1' ? this.game.piedras.equipo1 : this.game.piedras.equipo2,
-            marcadorRival: team === 'equipo1' ? this.game.piedras.equipo2 : this.game.piedras.equipo1
+            marcadorRival: team === 'equipo1' ? this.game.piedras.equipo2 : this.game.piedras.equipo1,
+            ordagoActivo: this.game.ordagoActivo
         };
     }
 
@@ -1042,7 +1347,7 @@ class MusController {
 function injectStyles() {
     const style = document.createElement('style');
     style.textContent = `
-        /* Reset cartas del HTML */
+        /* Cartas con imagenes */
         #mano-jugador .card,
         #mano-pareja .card,
         #mano-rival1 .card,
@@ -1050,38 +1355,26 @@ function injectStyles() {
             width: 70px;
             height: 105px;
             border-radius: 8px;
-            border: 2px solid #333;
+            border: none;
             margin: 0 5px;
-            display: inline-flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 5px;
+            display: inline-block;
+            padding: 0;
             box-sizing: border-box;
             position: relative;
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
-            font-family: 'Georgia', serif;
             vertical-align: top;
+            overflow: hidden;
+            background: transparent;
         }
 
-        /* Carta boca abajo */
-        .card--back {
-            background: linear-gradient(135deg, #1a3a5c 0%, #2a5a8c 50%, #1a3a5c 100%);
-            border-color: #0d2040;
-            color: rgba(255,255,255,0.3);
-            justify-content: center;
-            align-items: center;
-        }
-
-        .card-back-text {
-            font-size: 14px;
-            font-weight: bold;
-            letter-spacing: 2px;
-        }
-
-        /* Carta boca arriba */
-        .card--front {
-            background: #fffef5;
+        .card-img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            border-radius: 8px;
+            pointer-events: none;
         }
 
         .card--front:hover {
@@ -1092,97 +1385,7 @@ function injectStyles() {
         .card--selected {
             transform: translateY(-15px) !important;
             box-shadow: 0 15px 30px rgba(0,0,0,0.4) !important;
-            border-color: #4CAF50 !important;
-        }
-
-        /* Colores por palo - Baraja Espanola */
-        .card--oros { background: linear-gradient(135deg, #fffef0 0%, #fff8d0 100%); }
-        .card--oros .card-corner, .card--oros .card-suit-small { color: #DAA520; }
-
-        .card--copas { background: linear-gradient(135deg, #fff5f5 0%, #ffe8e8 100%); }
-        .card--copas .card-corner, .card--copas .card-suit-small { color: #C41E3A; }
-
-        .card--espadas { background: linear-gradient(135deg, #f8f8ff 0%, #e8e8ff 100%); }
-        .card--espadas .card-corner, .card--espadas .card-suit-small { color: #2F4F8F; }
-
-        .card--bastos { background: linear-gradient(135deg, #f5fff5 0%, #e0ffe0 100%); }
-        .card--bastos .card-corner, .card--bastos .card-suit-small { color: #228B22; }
-
-        /* SVG suit icons */
-        .suit-icon {
-            width: 100%;
-            height: 100%;
-        }
-
-        .card-suit-small {
-            font-size: 12px;
-            line-height: 1;
-        }
-
-        /* Figuras (Sota, Caballo, Rey) */
-        .card-figura {
-            font-size: 24px;
-            font-weight: bold;
-            display: block;
-            line-height: 1;
-        }
-        .card-figura-label {
-            font-size: 8px;
-            display: block;
-            opacity: 0.6;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .card--oros .card-figura { color: #B8860B; }
-        .card--copas .card-figura { color: #8B0000; }
-        .card--espadas .card-figura { color: #1a2a4f; }
-        .card--bastos .card-figura { color: #145214; }
-
-        .card--oros .card-figura-label { color: #DAA520; }
-        .card--copas .card-figura-label { color: #C41E3A; }
-        .card--espadas .card-figura-label { color: #2F4F8F; }
-        .card--bastos .card-figura-label { color: #228B22; }
-
-        /* Esquinas de carta */
-        .card-corner {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            line-height: 1;
-        }
-
-        .card-corner--top {
-            align-self: flex-start;
-        }
-
-        .card-corner--bottom {
-            align-self: flex-end;
-            transform: rotate(180deg);
-        }
-
-        .card-value {
-            font-size: 18px;
-            font-weight: bold;
-        }
-
-        .card-suit {
-            font-size: 16px;
-        }
-
-        .card-center {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 28px;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
+            outline: 3px solid #4CAF50;
         }
 
         /* Manos de jugadores */
@@ -1202,26 +1405,18 @@ function injectStyles() {
             margin: -20px 0;
         }
 
-        /* Status de jugadores */
-        .player-status {
-            display: block;
-            min-height: 20px;
-            font-size: 14px;
-            font-weight: bold;
-            color: #FFD700;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
-            text-align: center;
-            margin-top: 5px;
+        /* Speech bubble styles are in css/style.css */
+        /* Override: ensure player-info allows overflow for bubbles */
+        .player-info {
+            position: relative;
+            overflow: visible;
         }
 
-        .status-animate {
-            animation: statusPop 0.3s ease-out;
-        }
-
-        @keyframes statusPop {
-            0% { transform: scale(0.8); opacity: 0; }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); opacity: 1; }
+        /* Nombre del jugador que esta hablando */
+        .player-name--speaking {
+            color: #FFD700 !important;
+            font-weight: bold !important;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.6) !important;
         }
 
         /* Indicador de turno activo */
@@ -1325,29 +1520,31 @@ function injectStyles() {
             50% { transform: translateX(-50%) scale(1.05); }
         }
 
-        /* Mensaje informativo */
+        /* Mensaje informativo - grande y visible, centrado en la mesa */
         .info-message {
             position: fixed;
-            top: 80px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%) translateY(-20px);
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: rgba(0, 0, 0, 0.9);
+            color: #FFD700;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 20px;
             font-weight: bold;
             z-index: 200;
             opacity: 0;
-            transition: opacity 0.3s, transform 0.3s;
+            transition: opacity 0.4s, transform 0.4s;
             pointer-events: none;
             text-align: center;
             max-width: 90%;
+            border: 2px solid rgba(255, 215, 0, 0.3);
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
         }
 
         .info-message--visible {
             opacity: 1;
-            transform: translateX(-50%) translateY(0);
+            transform: translate(-50%, -50%) scale(1);
         }
 
         /* Grupos de botones */
@@ -1406,9 +1603,6 @@ function injectStyles() {
                 height: 82px;
                 margin: 0 3px;
             }
-            .card-value { font-size: 14px; }
-            .card-suit { font-size: 12px; }
-            .card-center { font-size: 20px; }
             .btn { padding: 10px 18px; font-size: 13px; }
             .mano-badge { font-size: 8px; padding: 1px 4px; }
         }
@@ -1419,12 +1613,51 @@ function injectStyles() {
                 width: 48px;
                 height: 72px;
                 margin: 0 2px;
-                padding: 3px;
             }
-            .card-value { font-size: 12px; }
-            .card-suit { font-size: 10px; }
-            .card-center { font-size: 16px; }
             .btn { padding: 8px 14px; font-size: 12px; }
+        }
+
+        /* Resumen de ronda */
+        .resumen-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+
+        .resumen-table th,
+        .resumen-table td {
+            padding: 8px 12px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .resumen-table th {
+            color: #FFD700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .resumen-table td {
+            color: #ddd;
+            font-size: 14px;
+        }
+
+        .resumen-nosotros {
+            color: #4CAF50 !important;
+            font-weight: bold;
+        }
+
+        .resumen-ellos {
+            color: #f44336 !important;
+            font-weight: bold;
+        }
+
+        .resumen-totals td {
+            border-top: 2px solid rgba(255, 215, 0, 0.3);
+            font-weight: bold;
+            color: #FFD700;
+            font-size: 15px;
         }
     `;
     document.head.appendChild(style);

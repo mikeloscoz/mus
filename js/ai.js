@@ -482,7 +482,8 @@ export class AIPlayer {
             marcadorRival = 0,
             parejaYaEnvido = false,
             parejaPaso = false,
-            piedrasRestantes = 40
+            piedrasRestantes = 40,
+            ordagoActivo = false
         } = gameState;
 
         // Factor de presion por marcador
@@ -502,6 +503,14 @@ export class AIPlayer {
 
         // Fuerza ajustada
         const fuerzaAjustada = Math.min(100, fuerza * this.factorAgresividad * factorPresion * factorPareja);
+
+        // Si hay ordago activo, solo podemos aceptar o rechazar
+        if (ordagoActivo) {
+            if (fuerzaAjustada >= 50 || Math.random() < this.factorFarol * 0.5) {
+                return { action: ACCION.QUIERO, amount: 0 };
+            }
+            return { action: ACCION.NO_QUIERO, amount: 0 };
+        }
 
         // Si no hay apuesta previa (somos los primeros o despues de paso)
         if (currentBet === 0) {

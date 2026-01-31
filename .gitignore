@@ -1,6 +1,10 @@
 # Claude files
 .claude
 iawot-plans/
-images/
-node_modules/
 templates/
+
+# Dependencias
+node_modules/
+
+# Imagenes de prueba
+images/

@@ -346,3 +346,171 @@ describe('Game - hayJuego', () => {
         expect(game.hayJuego()).toBe(true);
     });
 });
+
+describe('Game - Official Scoring Rules', () => {
+    let game;
+
+    beforeEach(() => {
+        game = new Game();
+        game.manoIndex = 0;
+    });
+
+    it('deje (no quiero) should always give exactly 1 piedra', () => {
+        game.faseActual = FASES.ENVITE;
+        game.lanceActual = LANCES.GRANDE;
+        game.enviteActual = {
+            lance: LANCES.GRANDE,
+            apuesta: 10, // Even with big bet, deje = 1
+            equipoApostador: 'equipo1',
+            ultimaAccion: 'envido',
+            respuestas: {},
+            pasaron: [],
+            turnoIndex: 0,
+            esperandoRespuesta: true,
+            equipoDebeResponder: 'equipo2'
+        };
+
+        // Give players hands for resolution
+        game.players.player.hand = [new Card('oros', 12), new Card('copas', 12), new Card('espadas', 12), new Card('bastos', 12)];
+        game.players.partner.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)];
+        game.players.rival1.hand = [new Card('oros', 7), new Card('copas', 7), new Card('espadas', 7), new Card('bastos', 7)];
+        game.players.rival2.hand = [new Card('oros', 5), new Card('copas', 5), new Card('espadas', 5), new Card('bastos', 5)];
+
+        game.handleEnvite('rival1', ACCIONES_ENVITE.NO_QUIERO);
+
+        // Deje = exactly 1 piedra, not Math.max(1, 10-2) = 8
+        expect(game.puntosPendientes.equipo1).toBe(1);
+    });
+
+    it('Juego de 31 should score 3 piedras base (not 2)', () => {
+        // Setup: equipo1 has juego de 31
+        game.players.player.hand = [new Card('oros', 12), new Card('copas', 12), new Card('espadas', 12), new Card('bastos', 1)]; // 31
+        game.players.partner.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // 4
+        game.players.rival1.hand = [new Card('oros', 12), new Card('copas', 12), new Card('espadas', 5), new Card('bastos', 7)]; // 32
+        game.players.rival2.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // 4
+
+        game.faseActual = FASES.ENVITE;
+        game.lanceActual = LANCES.JUEGO;
+        game.enviteActual = {
+            lance: LANCES.JUEGO,
+            apuesta: 0,
+            equipoApostador: null,
+            ultimaAccion: null,
+            respuestas: {},
+            pasaron: ['player', 'rival2', 'partner', 'rival1'],
+            turnoIndex: 0,
+            esperandoRespuesta: false,
+            equipoDebeResponder: null
+        };
+        game.ordagoActivo = false;
+
+        game.resolveLance(LANCES.JUEGO);
+
+        // 31 is best juego, equipo1 wins. Juego de 31 = 3 piedras
+        expect(game.puntosPendientes.equipo1).toBe(3);
+    });
+
+    it('Juego de 32 should score 2 piedras base (not 3)', () => {
+        game.players.player.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // 4
+        game.players.partner.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // 4
+        game.players.rival1.hand = [new Card('oros', 12), new Card('copas', 12), new Card('espadas', 5), new Card('bastos', 7)]; // 32
+        game.players.rival2.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // 4
+
+        game.faseActual = FASES.ENVITE;
+        game.lanceActual = LANCES.JUEGO;
+        game.enviteActual = {
+            lance: LANCES.JUEGO, apuesta: 0, equipoApostador: null,
+            ultimaAccion: null, respuestas: {}, pasaron: ['player', 'rival2', 'partner', 'rival1'],
+            turnoIndex: 0, esperandoRespuesta: false, equipoDebeResponder: null
+        };
+        game.ordagoActivo = false;
+
+        game.resolveLance(LANCES.JUEGO);
+
+        // 32 is not 31, so 2 piedras base
+        expect(game.puntosPendientes.equipo2).toBe(2);
+    });
+
+    it('Pares scoring should include both team members pares', () => {
+        // equipo1: player has duples (3 pts), partner has par (1 pt) = 4 total
+        game.players.player.hand = [new Card('oros', 12), new Card('copas', 12), new Card('espadas', 7), new Card('bastos', 7)]; // duples
+        game.players.partner.hand = [new Card('oros', 11), new Card('copas', 11), new Card('espadas', 5), new Card('bastos', 1)]; // par
+        game.players.rival1.hand = [new Card('oros', 10), new Card('copas', 10), new Card('espadas', 4), new Card('bastos', 1)]; // par
+        game.players.rival2.hand = [new Card('oros', 6), new Card('copas', 5), new Card('espadas', 4), new Card('bastos', 1)]; // no pares
+
+        game.faseActual = FASES.ENVITE;
+        game.lanceActual = LANCES.PARES;
+        game.enviteActual = {
+            lance: LANCES.PARES, apuesta: 0, equipoApostador: null,
+            ultimaAccion: null, respuestas: {}, pasaron: ['player', 'rival2', 'partner', 'rival1'],
+            turnoIndex: 0, esperandoRespuesta: false, equipoDebeResponder: null
+        };
+        game.ordagoActivo = false;
+
+        game.resolveLance(LANCES.PARES);
+
+        // equipo1 wins: player duples(3) + partner par(1) = 4 piedras
+        expect(game.puntosPendientes.equipo1).toBe(4);
+    });
+
+    it('Juego hierarchy: 31 > 32 > 40 > 37 > 36 > 35 > 34 > 33', () => {
+        // Test 31 beats everything
+        game.players.player.hand = [new Card('oros', 12), new Card('copas', 12), new Card('espadas', 12), new Card('bastos', 1)]; // 31
+        game.players.partner.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // 4
+        game.players.rival1.hand = [new Card('oros', 12), new Card('copas', 12), new Card('espadas', 12), new Card('bastos', 12)]; // 40 (la Real)
+        game.players.rival2.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // 4
+
+        expect(game.resolverJuego()).toBe('equipo1'); // 31 beats 40
+    });
+
+    it('Grande and Chica in paso should score 1 piedra each', () => {
+        game.players.player.hand = [new Card('oros', 12), new Card('copas', 12), new Card('espadas', 12), new Card('bastos', 12)]; // Best grande
+        game.players.partner.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // Best chica
+        game.players.rival1.hand = [new Card('oros', 7), new Card('copas', 7), new Card('espadas', 7), new Card('bastos', 7)];
+        game.players.rival2.hand = [new Card('oros', 5), new Card('copas', 5), new Card('espadas', 5), new Card('bastos', 5)];
+
+        game.faseActual = FASES.ENVITE;
+        game.lanceActual = LANCES.GRANDE;
+        game.enviteActual = {
+            lance: LANCES.GRANDE, apuesta: 0, equipoApostador: null,
+            ultimaAccion: null, respuestas: {}, pasaron: ['player', 'rival2', 'partner', 'rival1'],
+            turnoIndex: 0, esperandoRespuesta: false, equipoDebeResponder: null
+        };
+        game.ordagoActivo = false;
+
+        game.resolveLance(LANCES.GRANDE);
+        expect(game.puntosPendientes.equipo1).toBe(1); // Grande paso = 1 piedra
+
+        // Now chica
+        game.lanceActual = LANCES.CHICA;
+        game.faseActual = FASES.ENVITE;
+        game.enviteActual = {
+            lance: LANCES.CHICA, apuesta: 0, equipoApostador: null,
+            ultimaAccion: null, respuestas: {}, pasaron: ['player', 'rival2', 'partner', 'rival1'],
+            turnoIndex: 0, esperandoRespuesta: false, equipoDebeResponder: null
+        };
+        game.ordagoActivo = false;
+
+        game.resolveLance(LANCES.CHICA);
+        expect(game.puntosPendientes.equipo1).toBe(2); // +1 for chica
+    });
+
+    it('Punto in paso should score 1 piedra', () => {
+        game.players.player.hand = [new Card('oros', 7), new Card('copas', 7), new Card('espadas', 7), new Card('bastos', 7)]; // 28 best punto
+        game.players.partner.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // 4
+        game.players.rival1.hand = [new Card('oros', 5), new Card('copas', 5), new Card('espadas', 5), new Card('bastos', 5)]; // 20
+        game.players.rival2.hand = [new Card('oros', 1), new Card('copas', 1), new Card('espadas', 1), new Card('bastos', 1)]; // 4
+
+        game.faseActual = FASES.ENVITE;
+        game.lanceActual = LANCES.PUNTO;
+        game.enviteActual = {
+            lance: LANCES.PUNTO, apuesta: 0, equipoApostador: null,
+            ultimaAccion: null, respuestas: {}, pasaron: ['player', 'rival2', 'partner', 'rival1'],
+            turnoIndex: 0, esperandoRespuesta: false, equipoDebeResponder: null
+        };
+        game.ordagoActivo = false;
+
+        game.resolveLance(LANCES.PUNTO);
+        expect(game.puntosPendientes.equipo1).toBe(1); // Punto paso = 1 piedra
+    });
+});
