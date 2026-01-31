@@ -1010,7 +1010,7 @@ class Game {
      * @returns {number[]} - Array de valores ordenados de mayor a menor
      */
     getGrandeValues(hand) {
-        return hand.map(card => this.getValorMusComparacion(card.value)).sort((a, b) => b - a);
+        return hand.map(card => this.getValorMusComparacion(card.valor)).sort((a, b) => b - a);
     }
 
     /**
@@ -1020,7 +1020,7 @@ class Game {
      * @returns {number[]} - Array de valores ordenados de menor a mayor
      */
     getChicaValues(hand) {
-        return hand.map(card => this.getValorMusComparacion(card.value)).sort((a, b) => a - b);
+        return hand.map(card => this.getValorMusComparacion(card.valor)).sort((a, b) => a - b);
     }
 
     /**
@@ -1107,7 +1107,7 @@ class Game {
      */
     detectarPares(hand) {
         // Convertir valores para comparacion MUS (3=Rey, 2=As)
-        const valoresConvertidos = hand.map(card => this.getValorMusComparacion(card.value));
+        const valoresConvertidos = hand.map(card => this.getValorMusComparacion(card.valor));
         const conteo = {};
 
         for (const valor of valoresConvertidos) {
@@ -1271,18 +1271,18 @@ class Game {
     getValorJuego(hand) {
         let total = 0;
         for (const card of hand) {
-            if (card.value >= 10) {
+            if (card.valor >= 10) {
                 // Figuras (Rey=12, Caballo=11, Sota=10) valen 10 puntos
                 total += 10;
-            } else if (card.value === 3) {
+            } else if (card.valor === 3) {
                 // El 3 vale 10 puntos (como las figuras)
                 total += 10;
-            } else if (card.value === 2) {
+            } else if (card.valor === 2) {
                 // El 2 vale 1 punto (como el As)
                 total += 1;
             } else {
                 // Resto de cartas (1, 4, 5, 6, 7) valen su valor nominal
-                total += card.value;
+                total += card.valor;
             }
         }
         return total;

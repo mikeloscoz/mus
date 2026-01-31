@@ -118,10 +118,10 @@ body {
     flex: 1;
     display: grid;
     grid-template-areas:
-        ".      top    ."
+        "left   top    right"
         "left   center right"
-        ".      bottom .";
-    grid-template-columns: 1fr 2fr 1fr;
+        "left   bottom right";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
     grid-template-rows: auto 1fr auto;
     gap: 4px;
     padding: 4px;
@@ -145,6 +145,35 @@ body {
 .player-area--left { grid-area: left; }
 .player-area--right { grid-area: right; }
 
+/* Cartas mas pequenas en las zonas laterales para caber horizontal */
+.player-area--left .card,
+.player-area--right .card {
+    width: 40px;
+    height: 60px;
+    padding: 2px;
+}
+.player-area--left .card-value,
+.player-area--right .card-value {
+    font-size: 10px;
+}
+.player-area--left .card-suit,
+.player-area--right .card-suit {
+    font-size: 8px;
+}
+.player-area--left .card-center,
+.player-area--right .card-center {
+    font-size: 14px;
+    width: 24px;
+    height: 24px;
+}
+
+/* Manos laterales en horizontal con overlap */
+.player-area--left .player-hand,
+.player-area--right .player-hand {
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
 .player-info {
     text-align: center;
     margin: 2px 0;
@@ -153,6 +182,14 @@ body {
 .player-name {
     font-size: 12px;
     color: #ddd;
+    transition: all 0.3s ease;
+}
+
+.player-name--active {
+    color: #4CAF50;
+    font-size: 15px;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(76, 175, 80, 0.8);
 }
 
 .player-status {
@@ -378,21 +415,9 @@ body {
 .btn--no-quiero { background: #E53935; color: white; }
 .btn--primary { background: #2196F3; color: white; }
 
-/* ===== INDICADOR DE TURNO ===== */
+/* ===== INDICADOR DE TURNO (oculto - reemplazado por resaltado de nombre) ===== */
 .turn-indicator {
-    display: none;
-    position: fixed;
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(76, 175, 80, 0.95);
-    color: white;
-    padding: 8px 20px;
-    border-radius: 20px;
-    font-weight: bold;
-    font-size: 14px;
-    z-index: 100;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    display: none !important;
 }
 
 /* ===== MODALES ===== */

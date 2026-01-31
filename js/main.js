@@ -199,25 +199,34 @@ class MusController {
     setCurrentTurn(playerId) {
         this.currentTurn = playerId;
 
-        // Quitar resaltado de todos
+        // Quitar resaltado de todos los jugadores
         ['player', 'partner', 'rival1', 'rival2'].forEach(p => {
             const area = this.getPlayerArea(p);
+            const nameEl = this.getPlayerNameElement(p);
             if (area) {
                 area.classList.remove('player-area--active-turn');
             }
+            if (nameEl) {
+                nameEl.classList.remove('player-name--active');
+            }
         });
 
-        // Resaltar jugador actual
+        // Resaltar area y nombre del jugador actual
         const currentArea = this.getPlayerArea(playerId);
+        const currentNameEl = this.getPlayerNameElement(playerId);
         if (currentArea) {
             currentArea.classList.add('player-area--active-turn');
         }
+        if (currentNameEl) {
+            currentNameEl.classList.add('player-name--active');
+        }
 
-        // Mostrar/ocultar indicador de turno del humano
-        const isHumanTurn = playerId === 'player';
-        this.showTurnIndicator(isHumanTurn);
+        // NO usar indicador flotante - el resaltado del nombre es suficiente
+        // Solo ocultar siempre el indicador viejo para que no tape cartas
+        this.showTurnIndicator(false);
 
         // Habilitar/deshabilitar botones segun turno
+        const isHumanTurn = playerId === 'player';
         this.setButtonsEnabled(isHumanTurn);
         this.waitingForHuman = isHumanTurn;
 
@@ -321,17 +330,19 @@ class MusController {
         cardEl.classList.add('card--front');
 
         const valorDisplay = this.getValorDisplay(card.valor);
-        const paloSymbol = this.getPaloSymbol(card.palo);
+        const paloSvg = this.getPaloSymbol(card.palo);
+        const paloSmall = this.getPaloSymbolSmall(card.palo);
+        const figuraDisplay = this.getFiguraDisplay(card.valor);
 
         cardEl.innerHTML = `
             <div class="card-corner card-corner--top">
                 <span class="card-value">${valorDisplay}</span>
-                <span class="card-suit">${paloSymbol}</span>
+                <span class="card-suit-small">${paloSmall}</span>
             </div>
-            <div class="card-center">${paloSymbol}</div>
+            <div class="card-center">${figuraDisplay || paloSvg}</div>
             <div class="card-corner card-corner--bottom">
                 <span class="card-value">${valorDisplay}</span>
-                <span class="card-suit">${paloSymbol}</span>
+                <span class="card-suit-small">${paloSmall}</span>
             </div>
         `;
 
@@ -339,16 +350,38 @@ class MusController {
     }
 
     getValorDisplay(valor) {
-        const displays = { 1: 'A', 10: 'S', 11: 'C', 12: 'R' };
+        const displays = { 1: 'As', 10: 'S', 11: 'C', 12: 'R' };
         return displays[valor] || valor.toString();
     }
 
+    getFiguraDisplay(valor) {
+        // Devuelve representacion especial para figuras, o null para cartas normales
+        const figuras = {
+            10: `<span class="card-figura">S</span><span class="card-figura-label">Sota</span>`,
+            11: `<span class="card-figura">C</span><span class="card-figura-label">Caballo</span>`,
+            12: `<span class="card-figura">R</span><span class="card-figura-label">Rey</span>`
+        };
+        return figuras[valor] || null;
+    }
+
     getPaloSymbol(palo) {
+        // SVGs de la baraja espanola
+        const svgs = {
+            oros: `<svg viewBox="0 0 24 24" class="suit-icon suit-icon--oros"><circle cx="12" cy="12" r="9" fill="#DAA520" stroke="#B8860B" stroke-width="1.5"/><circle cx="12" cy="12" r="5" fill="#FFD700" stroke="#DAA520" stroke-width="1"/><circle cx="12" cy="12" r="1.5" fill="#B8860B"/></svg>`,
+            copas: `<svg viewBox="0 0 24 24" class="suit-icon suit-icon--copas"><path d="M7 4 C7 4 5 4 5 8 C5 12 8 13 8 13 L8 17 L6 17 L6 19 L18 19 L18 17 L16 17 L16 13 C16 13 19 12 19 8 C19 4 17 4 17 4 Z" fill="#C41E3A" stroke="#8B0000" stroke-width="0.8"/><ellipse cx="12" cy="8" rx="5" ry="4" fill="#E8384F" opacity="0.4"/></svg>`,
+            espadas: `<svg viewBox="0 0 24 24" class="suit-icon suit-icon--espadas"><path d="M12 2 L12 16 M9 18 L15 18 M12 16 L12 20 M12 2 C12 2 6 6 6 10 C6 13 9 14 12 16 C15 14 18 13 18 10 C18 6 12 2 12 2Z" fill="#2F4F8F" stroke="#1a2a4f" stroke-width="0.8"/><line x1="8" y1="6" x2="16" y2="6" stroke="#4a6faf" stroke-width="1.2"/></svg>`,
+            bastos: `<svg viewBox="0 0 24 24" class="suit-icon suit-icon--bastos"><rect x="10" y="2" width="4" height="18" rx="2" fill="#228B22" stroke="#145214" stroke-width="0.8"/><ellipse cx="12" cy="4" rx="3.5" ry="2.5" fill="#2EA82E" stroke="#145214" stroke-width="0.6"/><line x1="10" y1="8" x2="14" y2="8" stroke="#145214" stroke-width="0.6"/><line x1="10" y1="12" x2="14" y2="12" stroke="#145214" stroke-width="0.6"/></svg>`
+        };
+        return svgs[palo] || palo[0].toUpperCase();
+    }
+
+    getPaloSymbolSmall(palo) {
+        // Simbolos Unicode simplificados para las esquinas
         const symbols = {
-            oros: '◆',
-            copas: '❤',
-            espadas: '♠',
-            bastos: '♣'
+            oros: '\u2B24',    // circulo negro (moneda)
+            copas: '\u2615',   // taza (copa)
+            espadas: '\u2694', // espadas cruzadas
+            bastos: '\u2663'   // trebol (garrote)
         };
         return symbols[palo] || palo[0].toUpperCase();
     }
@@ -1062,18 +1095,54 @@ function injectStyles() {
             border-color: #4CAF50 !important;
         }
 
-        /* Colores por palo */
+        /* Colores por palo - Baraja Espanola */
         .card--oros { background: linear-gradient(135deg, #fffef0 0%, #fff8d0 100%); }
-        .card--oros .card-corner, .card--oros .card-center { color: #DAA520; }
+        .card--oros .card-corner, .card--oros .card-suit-small { color: #DAA520; }
 
         .card--copas { background: linear-gradient(135deg, #fff5f5 0%, #ffe8e8 100%); }
-        .card--copas .card-corner, .card--copas .card-center { color: #C41E3A; }
+        .card--copas .card-corner, .card--copas .card-suit-small { color: #C41E3A; }
 
         .card--espadas { background: linear-gradient(135deg, #f8f8ff 0%, #e8e8ff 100%); }
-        .card--espadas .card-corner, .card--espadas .card-center { color: #2F4F8F; }
+        .card--espadas .card-corner, .card--espadas .card-suit-small { color: #2F4F8F; }
 
         .card--bastos { background: linear-gradient(135deg, #f5fff5 0%, #e0ffe0 100%); }
-        .card--bastos .card-corner, .card--bastos .card-center { color: #228B22; }
+        .card--bastos .card-corner, .card--bastos .card-suit-small { color: #228B22; }
+
+        /* SVG suit icons */
+        .suit-icon {
+            width: 100%;
+            height: 100%;
+        }
+
+        .card-suit-small {
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        /* Figuras (Sota, Caballo, Rey) */
+        .card-figura {
+            font-size: 24px;
+            font-weight: bold;
+            display: block;
+            line-height: 1;
+        }
+        .card-figura-label {
+            font-size: 8px;
+            display: block;
+            opacity: 0.6;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card--oros .card-figura { color: #B8860B; }
+        .card--copas .card-figura { color: #8B0000; }
+        .card--espadas .card-figura { color: #1a2a4f; }
+        .card--bastos .card-figura { color: #145214; }
+
+        .card--oros .card-figura-label { color: #DAA520; }
+        .card--copas .card-figura-label { color: #C41E3A; }
+        .card--espadas .card-figura-label { color: #2F4F8F; }
+        .card--bastos .card-figura-label { color: #228B22; }
 
         /* Esquinas de carta */
         .card-corner {
@@ -1107,7 +1176,13 @@ function injectStyles() {
             left: 50%;
             transform: translate(-50%, -50%);
             font-size: 28px;
-            opacity: 0.4;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
         }
 
         /* Manos de jugadores */
@@ -1170,6 +1245,37 @@ function injectStyles() {
         @keyframes turnPulse {
             0%, 100% { opacity: 0.5; }
             50% { opacity: 1; }
+        }
+
+        /* Nombre del jugador activo - MUY VISIBLE */
+        .player-name--active {
+            color: #4CAF50 !important;
+            font-size: 16px !important;
+            font-weight: bold !important;
+            text-shadow: 0 0 10px rgba(76, 175, 80, 0.8), 0 0 20px rgba(76, 175, 80, 0.4) !important;
+            animation: nameGlow 1.5s ease-in-out infinite;
+            position: relative;
+            padding: 2px 10px;
+            background: rgba(76, 175, 80, 0.15);
+            border-radius: 12px;
+            display: inline-block;
+        }
+
+        .player-name--active::before {
+            content: '\u25B6';
+            margin-right: 4px;
+            font-size: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes nameGlow {
+            0%, 100% { text-shadow: 0 0 10px rgba(76, 175, 80, 0.8), 0 0 20px rgba(76, 175, 80, 0.4); }
+            50% { text-shadow: 0 0 15px rgba(76, 175, 80, 1), 0 0 30px rgba(76, 175, 80, 0.6); }
+        }
+
+        /* Ocultar indicador flotante viejo */
+        #indicador-turno {
+            display: none !important;
         }
 
         /* Indicador de MANO */

@@ -1,2 +1,6 @@
 # Claude files
 .claude
+iawot-plans/
+images/
+node_modules/
+templates/

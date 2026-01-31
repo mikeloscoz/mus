@@ -1,0 +1,27 @@
+{
+  "name": "mus",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikeloscoz/mus.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/mikeloscoz/mus/issues"
+  },
+  "homepage": "https://github.com/mikeloscoz/mus#readme",
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  }
+}
