@@ -566,6 +566,20 @@ class Game {
     }
 
     /**
+     * Comprueba si un jugador es elegible para el lance actual (pares/juego)
+     */
+    isEligibleForLance(playerId) {
+        const lance = this.lanceActual;
+        if (lance === LANCES.PARES) {
+            return this.getPares(this.players[playerId].hand).tipo !== null;
+        }
+        if (lance === LANCES.JUEGO) {
+            return this.getValorJuego(this.players[playerId].hand) >= 31;
+        }
+        return true; // GRANDE, CHICA, PUNTO - todos elegibles
+    }
+
+    /**
      * Obtiene el siguiente jugador del equipo que debe responder
      * @param {string} equipo - Equipo que debe responder
      * @returns {string|null} - ID del siguiente jugador o null
@@ -577,7 +591,8 @@ class Game {
             const playerId = this.turnOrder[absoluteIndex];
             const player = this.players[playerId];
 
-            if (player.team === equipo && !this.enviteActual.respuestas[playerId]) {
+            if (player.team === equipo && !this.enviteActual.respuestas[playerId]
+                && this.isEligibleForLance(playerId)) {
                 return playerId;
             }
         }
@@ -800,18 +815,33 @@ class Game {
      * Maneja la accion NO_QUIERO
      */
     _handleNoQuiero(playerId, equipoJugador) {
-        this.faseActual = FASES.RESOLUCION; // Marcar como resuelto para evitar race conditions
         this.enviteActual.respuestas[playerId] = 'no_quiero';
-        this.enviteActual.esperandoRespuesta = false;
-        this.ordagoActivo = false; // Reset ordago si lo habia
+        this.enviteActual.pasaron.push(playerId);
 
         this.emit('enviteAction', {
             player: playerId,
             action: 'no_quiero'
         });
 
-        // Deje: si hubo subida previa, el que subio se lleva la apuesta anterior
-        // Si fue el primer envido, deje = 1 piedra (regla oficial)
+        // Comprobar si hay compañero elegible que pueda responder
+        const hasEligibleTeammate = Object.keys(this.players).some(pid => {
+            if (pid === playerId) return false;
+            if (this.players[pid].team !== equipoJugador) return false;
+            if (this.enviteActual.respuestas[pid]) return false;
+            if (this.enviteActual.pasaron.includes(pid)) return false;
+            return this.isEligibleForLance(pid);
+        });
+
+        if (hasEligibleTeammate) {
+            // No resolver todavia - el compañero puede aceptar o subir
+            return true;
+        }
+
+        // Nadie mas puede responder - resolver como deje
+        this.faseActual = FASES.RESOLUCION;
+        this.enviteActual.esperandoRespuesta = false;
+        this.ordagoActivo = false;
+
         const puntos = this.enviteActual.apuestaAnterior > 0 ? this.enviteActual.apuestaAnterior : 1;
         const equipoGanador = this.enviteActual.equipoApostador;
         this.puntosPendientes[equipoGanador] += puntos;
@@ -823,7 +853,6 @@ class Game {
             razon: 'no_quiero'
         });
 
-        // NO llamar nextLance() aqui - main.js controla el timing
         return true;
     }
 

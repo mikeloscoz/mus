@@ -242,8 +242,9 @@ describe('Integration - Envido Flow', () => {
         // Mano envida
         game.handleEnvite('player', ACCIONES_ENVITE.ENVIDO, 5);
 
-        // Rival no quiere
+        // Rivales no quieren (ambos deben rechazar)
         game.handleEnvite('rival2', ACCIONES_ENVITE.NO_QUIERO);
+        game.handleEnvite('rival1', ACCIONES_ENVITE.NO_QUIERO);
 
         // Deje = 1 piedra always
         expect(game.puntosPendientes.equipo1).toBe(1);
@@ -286,6 +287,7 @@ describe('Integration - Envido Flow', () => {
 
         game.handleEnvite('player', ACCIONES_ENVITE.ORDAGO);
         game.handleEnvite('rival2', ACCIONES_ENVITE.NO_QUIERO);
+        game.handleEnvite('rival1', ACCIONES_ENVITE.NO_QUIERO);
 
         // Deje = 1 piedra, ordago deactivated
         expect(game.puntosPendientes.equipo1).toBe(1);
@@ -723,6 +725,7 @@ describe('Integration - Phase Transitions', () => {
 
         game.handleEnvite('player', ACCIONES_ENVITE.ENVIDO, 2);
         game.handleEnvite('rival2', ACCIONES_ENVITE.NO_QUIERO);
+        game.handleEnvite('rival1', ACCIONES_ENVITE.NO_QUIERO);
 
         // Critical: faseActual must be RESOLUCION, not ENVITE
         // This prevents stale AI timeouts from executing

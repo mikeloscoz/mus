@@ -377,6 +377,7 @@ describe('Game - Official Scoring Rules', () => {
         game.players.rival2.hand = [new Card('oros', 5), new Card('copas', 5), new Card('espadas', 5), new Card('bastos', 5)];
 
         game.handleEnvite('rival1', ACCIONES_ENVITE.NO_QUIERO);
+        game.handleEnvite('rival2', ACCIONES_ENVITE.NO_QUIERO);
 
         // Deje = exactly 1 piedra, not Math.max(1, 10-2) = 8
         expect(game.puntosPendientes.equipo1).toBe(1);

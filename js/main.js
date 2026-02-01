@@ -30,6 +30,10 @@ class MusController {
         // Accumulated lance results for end-of-round summary
         this.lanceResults = [];
 
+        // Declarations tracking for AI information awareness
+        this.declaracionesPares = {};
+        this.declaracionesJuego = {};
+
         this.init();
     }
 
@@ -160,9 +164,9 @@ class MusController {
 
     createAIPlayers() {
         this.aiPlayers = {
-            partner: new AIPlayer(DIFICULTAD.MEDIO),
-            rival1: new AIPlayer(DIFICULTAD.MEDIO),
-            rival2: new AIPlayer(DIFICULTAD.MEDIO)
+            partner: new AIPlayer(DIFICULTAD.DIFICIL),
+            rival1: new AIPlayer(DIFICULTAD.DIFICIL),
+            rival2: new AIPlayer(DIFICULTAD.DIFICIL)
         };
     }
 
@@ -602,6 +606,8 @@ class MusController {
         this.clearAllStatus();
         this.clearSpeakerHighlight();
         this.lanceResults = [];
+        this.declaracionesPares = {};
+        this.declaracionesJuego = {};
 
         // Actualizar indicador de mano
         this.updateManoIndicator(data.mano);
@@ -763,16 +769,9 @@ class MusController {
 
             for (const playerId of order) {
                 const pares = this.game.getPares(this.game.players[playerId].hand);
-                let text;
-                if (!pares.tipo) {
-                    text = 'No hay';
-                } else if (pares.tipo === 'par') {
-                    text = 'Pares';
-                } else if (pares.tipo === 'medias') {
-                    text = 'Medias';
-                } else if (pares.tipo === 'duples') {
-                    text = 'Duples';
-                }
+                const tienePares = pares.tipo ? 'si' : 'no';
+                this.declaracionesPares[playerId] = tienePares;
+                const text = pares.tipo ? 'Sí' : 'No';
                 speeches.push({ playerId, text });
             }
 
@@ -797,8 +796,10 @@ class MusController {
                 let text;
                 if (valor >= 31) {
                     text = 'Sí';
+                    this.declaracionesJuego[playerId] = 'si';
                 } else {
                     text = 'No';
+                    this.declaracionesJuego[playerId] = 'no';
                 }
                 speeches.push({ playerId, text });
             }
@@ -834,6 +835,15 @@ class MusController {
             this.turnQueue = this.turnQueue.filter(playerId =>
                 this.game.getValorJuego(this.game.players[playerId].hand) >= 31
             );
+        }
+
+        // Si solo un equipo tiene pares/juego, resolver automaticamente (sin envite posible)
+        if (lance === LANCES.PARES || lance === LANCES.JUEGO) {
+            const teams = new Set(this.turnQueue.map(pid => this.game.players[pid].team));
+            if (teams.size < 2) {
+                this.game.resolveLance(lance);
+                return;
+            }
         }
 
         // Iniciar primer turno
@@ -965,6 +975,13 @@ class MusController {
                 if (this.lanceGeneration !== gen) return;
                 this.game.handleEnvite(playerId, action, decision.amount);
                 this.turnQueue.shift();
+                // Si el compañero puede responder (no_quiero no resolvio), continuar
+                if (this.game.faseActual === FASES.ENVITE) {
+                    setTimeout(() => {
+                        if (this.lanceGeneration !== gen) return;
+                        this.processNextEnviteTurn();
+                    }, 1000);
+                }
             }, 1500);
             return;
         }
@@ -992,6 +1009,7 @@ class MusController {
 
     reorganizeTurnQueueForResponse(apostadorId) {
         const apostadorTeam = this.game.players[apostadorId].team;
+        const lance = this.game.lanceActual;
 
         // Ambos jugadores del equipo contrario pueden responder (en orden desde mano)
         const manoIndex = this.game.manoIndex;
@@ -1005,6 +1023,12 @@ class MusController {
 
             // Añadir jugadores del equipo contrario que no hayan pasado
             if (pTeam !== apostadorTeam && !this.game.enviteActual.pasaron.includes(pId)) {
+                // Filtrar por elegibilidad en PARES/JUEGO
+                if (lance === LANCES.PARES) {
+                    if (this.game.getPares(this.game.players[pId].hand).tipo === null) continue;
+                } else if (lance === LANCES.JUEGO) {
+                    if (this.game.getValorJuego(this.game.players[pId].hand) < 31) continue;
+                }
                 this.turnQueue.push(pId);
             }
         }
@@ -1291,6 +1315,16 @@ class MusController {
         this.highlightSpeaker('player');
         this.updatePlayerStatus('player', 'No quiero');
         this.game.handleEnvite('player', ACCIONES_ENVITE.NO_QUIERO);
+
+        // Si el compañero puede responder, continuar con la cola
+        if (this.game.faseActual === FASES.ENVITE) {
+            this.turnQueue.shift();
+            const gen = this.lanceGeneration;
+            setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
+                this.processNextEnviteTurn();
+            }, 1000);
+        }
     }
 
     // ==================== IA ====================
@@ -1323,10 +1357,40 @@ class MusController {
 
     getGameStateForAI(playerId) {
         const team = this.game.players[playerId].team;
+        const marcadorPropio = team === 'equipo1' ? this.game.piedras.equipo1 : this.game.piedras.equipo2;
+        const marcadorRival = team === 'equipo1' ? this.game.piedras.equipo2 : this.game.piedras.equipo1;
+
+        // Determine teammate and rival IDs
+        const allPlayers = Object.keys(this.game.players);
+        const companero = allPlayers.find(id => id !== playerId && this.game.players[id].team === team);
+        const equipoRival = allPlayers.filter(id => this.game.players[id].team !== team);
+
+        // Determine position: mano or postre
+        const manoPlayer = this.game.getMano();
+        const manoTeam = this.game.players[manoPlayer].team;
+        // Player is "mano" if they are on the mano team (speaks first)
+        const posicion = (team === manoTeam) ? 'mano' : 'postre';
+
+        // Check if teammate already bet or passed in this lance
+        const envite = this.game.enviteActual;
+        const parejaYaEnvido = envite.respuestas[companero] === 'envido' || envite.respuestas[companero] === 'ordago';
+        const parejaPaso = envite.respuestas[companero] === 'paso';
+
         return {
-            marcadorPropio: team === 'equipo1' ? this.game.piedras.equipo1 : this.game.piedras.equipo2,
-            marcadorRival: team === 'equipo1' ? this.game.piedras.equipo2 : this.game.piedras.equipo1,
-            ordagoActivo: this.game.ordagoActivo
+            marcadorPropio,
+            marcadorRival,
+            ordagoActivo: this.game.ordagoActivo,
+            lanceActual: this.game.lanceActual,
+            posicion,
+            parejaYaEnvido,
+            parejaPaso,
+            apuestaActual: envite.apuesta || 0,
+            declaracionesPares: { ...this.declaracionesPares },
+            declaracionesJuego: { ...this.declaracionesJuego },
+            piedrasRestantes: 40 - marcadorPropio - marcadorRival,
+            piedrasEnJuego: 40 - marcadorPropio - marcadorRival,
+            equipoRival,
+            companero
         };
     }
 
