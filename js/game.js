@@ -699,12 +699,18 @@ class Game {
             this.emit('error', { mensaje: 'No se puede envidar con ordago activo' });
             return false;
         }
-        this.enviteActual.apuestaAnterior = this.enviteActual.apuesta;
-        if (this.enviteActual.apuesta === 0) {
-            this.enviteActual.apuesta = amount || 2;
-        } else {
-            this.enviteActual.apuesta += amount || 2;
+
+        // Calcular nueva apuesta
+        const incremento = amount || 2;
+        const nuevaApuesta = this.enviteActual.apuesta === 0 ? incremento : this.enviteActual.apuesta + incremento;
+
+        // Si la apuesta alcanza o supera 40, auto-convertir a ordago
+        if (nuevaApuesta >= PIEDRAS_PARA_GANAR) {
+            return this._handleOrdago(playerId, equipoJugador);
         }
+
+        this.enviteActual.apuestaAnterior = this.enviteActual.apuesta;
+        this.enviteActual.apuesta = nuevaApuesta;
         this.enviteActual.equipoApostador = equipoJugador;
         this.enviteActual.ultimaAccion = 'envido';
         this.enviteActual.respuestas[playerId] = 'envido';

@@ -51,6 +51,30 @@ const ORDAGO = {
     }
 };
 
+// Umbrales minimos por lance — basados en heuristicos reales de mus
+// Grande: minimo R+C para querer. Chica: minimo As+4.
+// Pares: par de ases NUNCA, par de reyes minimo. Medias casi siempre ganan.
+// Juego: 31 mejor (mano imbatible). 32/40 se puede querer.
+// Punto: 26 puntos minimo para querer.
+const UMBRALES_LANCE = {
+    // Minimo para ABRIR envite (apostar)
+    apostar: {
+        [LANCE.GRANDE]: 65,   // R + C minimo
+        [LANCE.CHICA]:  65,   // As + 4 minimo
+        [LANCE.PARES]:  28,   // Par de reyes minimo (par ases = ~12, nunca)
+        [LANCE.JUEGO]:  30,   // Cualquier juego
+        [LANCE.PUNTO]:  85    // 26 puntos minimo
+    },
+    // Minimo ABSOLUTO para ACEPTAR envite (quiero) — por debajo: siempre no quiero
+    quiero: {
+        [LANCE.GRANDE]: 60,   // R + C o cerca
+        [LANCE.CHICA]:  60,   // As + 4 o cerca
+        [LANCE.PARES]:  25,   // Par de reyes minimo
+        [LANCE.JUEGO]:  25,   // Cualquier juego
+        [LANCE.PUNTO]:  82    // ~25-26 puntos
+    }
+};
+
 /**
  * Jugador IA para el MUS
  */
@@ -281,24 +305,47 @@ export class AIPlayer {
     decideMus(hand) {
         const fuerzaMano = this._evaluarManoGeneral(hand);
         const pares = this._detectarPares(hand);
+        const tieneJuego = this._tieneJuego(hand);
         const puntos = this._calcularPuntos(hand);
+        const fuerzaPares = this._evaluarPares(hand);
+        const fuerzaJuego = tieneJuego ? this._evaluarJuego(hand) : 0;
 
-        // Duples: cortar casi siempre
-        if (pares.tipo === 'duples') return Math.random() < 0.05;
+        // Duples: cortar siempre (jugada de elite)
+        if (pares.tipo === 'duples') return Math.random() < 0.03;
 
         // 31 (mejor juego): cortar
-        if (puntos === 31) return Math.random() < 0.1;
+        if (puntos === 31) return Math.random() < 0.08;
 
-        // Medias fuertes: cortar
-        if (pares.tipo === 'medias' && pares.fuerza > 60) return Math.random() < 0.15;
+        // Pares + juego: la razon tipica para cortar, PERO depende de la calidad.
+        // Con malos pares (ases) y mal juego (33) sin estar de mano → mus.
+        if (pares.tipo && tieneJuego) {
+            // Buenos pares (par reyes+ o medias) + buen juego (40, 32, 31)
+            if (fuerzaPares >= 30 && fuerzaJuego >= 70) {
+                return Math.random() < 0.08; // 92% cortar
+            }
+            // Pares decentes + juego aceptable
+            if (fuerzaPares >= 25 && fuerzaJuego >= 40) {
+                return Math.random() < 0.25; // 75% cortar
+            }
+            // Malos pares (ases/4s) o mal juego (33): mus la mayoria
+            if (fuerzaPares < 20 || fuerzaJuego < 40) {
+                return Math.random() < 0.65; // 65% mus
+            }
+            // Intermedio
+            return Math.random() < 0.35; // 65% cortar
+        }
 
-        // Umbral fijo (sin dificultad)
-        const umbralCorte = 45;
+        // Medias fuertes sin juego: cortar
+        if (pares.tipo === 'medias' && fuerzaPares > 60) return Math.random() < 0.10;
 
-        if (fuerzaMano >= umbralCorte) return false;
-        if (fuerzaMano < 30) return true;
+        // Mano fuerte general: cortar
+        if (fuerzaMano >= 45) return false;
 
-        const probMus = (umbralCorte - fuerzaMano) / umbralCorte;
+        // Mano debil: pedir mus
+        if (fuerzaMano < 25) return true;
+
+        // Zona intermedia: probabilistico
+        const probMus = (45 - fuerzaMano) / 45;
         return Math.random() < probMus;
     }
 
@@ -483,6 +530,11 @@ export class AIPlayer {
         // Nunca ordago en zona adentro (cerca de ganar)
         if (ctx.zonaAdentro) return false;
 
+        // Caso especial: 31 de mano en juego = nadie te gana, ordago mas agresivo
+        if (lance === LANCE.JUEGO && fuerza === 100 && !ctx.esPostre) {
+            return Math.random() < 0.40;
+        }
+
         const config = ORDAGO.apertura[lance];
         if (!config) return false;
 
@@ -509,6 +561,17 @@ export class AIPlayer {
      * Solo con manos genuinamente fuertes.
      */
     _decidirRespuestaOrdago(fuerza, lance, ctx) {
+        // Caso especial: 31 de mano en juego = imbatible, siempre quiero
+        if (lance === LANCE.JUEGO && fuerza === 100 && !ctx.esPostre) {
+            return { action: ACCION.QUIERO, amount: 0 };
+        }
+
+        // Piso absoluto del lance — por debajo, nunca aceptar ordago
+        const minQuiero = UMBRALES_LANCE.quiero[lance] || 40;
+        if (fuerza < minQuiero) {
+            return { action: ACCION.NO_QUIERO, amount: 0 };
+        }
+
         let umbral = ORDAGO.aceptar[lance] || 85;
 
         // Zona adentro: mas conservador (+5)
@@ -535,43 +598,50 @@ export class AIPlayer {
      * Contexto ajusta umbrales de apuesta, fuerza bruta decide ordago.
      */
     _decidirApertura(fuerza, lance, ctx) {
-        // 1. ¿Ordago? (usa fuerza bruta, no inflada)
+        const minApostar = UMBRALES_LANCE.apostar[lance] || 50;
+
+        // 1. Por debajo del minimo del lance: siempre paso (farol raro)
+        if (fuerza < minApostar) {
+            // Farol: raro, apuesta pequeña, NUNCA ordago
+            if (fuerza > 15 && Math.random() < 0.04) {
+                return { action: ACCION.ENVIDO, amount: 2 };
+            }
+            return { action: ACCION.PASO, amount: 0 };
+        }
+
+        // 2. ¿Ordago? (usa fuerza bruta, no inflada)
         if (this._debeOrdagoApertura(fuerza, lance, ctx)) {
             return { action: ACCION.ORDAGO, amount: ctx.piedrasRestantes };
         }
 
-        // 2. Trap de mano: con mano fuerte, paso para cazar
+        // 3. Trap de mano: con mano muy fuerte, paso para cazar
         if (!ctx.esPostre && fuerza > 95 && Math.random() < 0.25) {
             return { action: ACCION.PASO, amount: 0 };
         }
 
-        // 3. Calcular umbral efectivo de apuesta (contexto ajusta umbrales)
+        // 4. Contexto ajusta umbrales de apuesta (no ordago)
         let ajuste = 0;
         if (ctx.infoVentaja) ajuste += 5;
         if (ctx.esPostre) ajuste += 3;
         if (ctx.parejaAposto) ajuste += 3;
         if (ctx.parejaPaso && fuerza < 50) ajuste -= 5;
 
-        const f = fuerza + ajuste; // Solo para decidir SI apostar y CUANTO (no ordago)
+        const f = fuerza + ajuste;
 
-        // Zona adentro: apuestas conservadoras
+        // 5. Zona adentro: conservador
         if (ctx.zonaAdentro) {
-            if (f >= 55) return { action: ACCION.ENVIDO, amount: 2 };
-            if (f >= 40 && Math.random() < 0.4) return { action: ACCION.ENVIDO, amount: 2 };
+            if (f >= minApostar) return { action: ACCION.ENVIDO, amount: 2 };
             return { action: ACCION.PASO, amount: 0 };
         }
 
-        // 4. Apuesta estandar
-        if (f >= 80) return { action: ACCION.ENVIDO, amount: 5 };
-        if (f >= 65) return { action: ACCION.ENVIDO, amount: 3 };
-        if (f >= 50) return { action: ACCION.ENVIDO, amount: 2 };
-        if (f >= 35 && Math.random() < 0.5) return { action: ACCION.ENVIDO, amount: 2 };
+        // 6. Apuesta proporcional al margen sobre el minimo
+        const margen = f - minApostar;
+        if (margen >= 25) return { action: ACCION.ENVIDO, amount: 5 };
+        if (margen >= 15) return { action: ACCION.ENVIDO, amount: 3 };
+        if (margen >= 5)  return { action: ACCION.ENVIDO, amount: 2 };
 
-        // 5. Farol: raro, apuesta pequeña, NUNCA ordago
-        if (fuerza < 25 && Math.random() < 0.05) {
-            return { action: ACCION.ENVIDO, amount: 2 };
-        }
-
+        // Justo en el minimo: envido 2 con probabilidad
+        if (Math.random() < 0.6) return { action: ACCION.ENVIDO, amount: 2 };
         return { action: ACCION.PASO, amount: 0 };
     }
 
@@ -583,7 +653,14 @@ export class AIPlayer {
      * Decide respuesta a apuesta existente.
      */
     _decidirRespuesta(fuerza, currentBet, lance, ctx) {
-        // Contexto ajusta umbrales
+        const minQuiero = UMBRALES_LANCE.quiero[lance] || 40;
+
+        // Piso absoluto del lance: por debajo NUNCA aceptar
+        if (fuerza < minQuiero) {
+            return { action: ACCION.NO_QUIERO, amount: 0 };
+        }
+
+        // Contexto ajusta umbrales (no fuerza de ordago)
         let ajuste = 0;
         if (ctx.infoVentaja) ajuste += 5;
         if (ctx.esPostre) ajuste += 3;
@@ -594,53 +671,53 @@ export class AIPlayer {
 
         // Zona adentro: conservador, nunca ordago
         if (ctx.zonaAdentro) {
-            if (f >= 55) return { action: ACCION.QUIERO, amount: currentBet };
-            if (f >= 35 && currentBet <= 2) return { action: ACCION.QUIERO, amount: currentBet };
+            if (f >= minQuiero + 10) return { action: ACCION.QUIERO, amount: currentBet };
+            if (currentBet <= 2) return { action: ACCION.QUIERO, amount: currentBet };
             return { action: ACCION.NO_QUIERO, amount: 0 };
         }
 
-        // Muy debil: fold
-        if (f < 20) {
-            return { action: ACCION.NO_QUIERO, amount: 0 };
-        }
+        // Margen sobre el minimo del lance
+        const margen = f - minQuiero;
 
-        // Debil (20-35): solo aceptar apuestas minimas
-        if (f < 35) {
-            if (currentBet <= 2 && Math.random() < 0.4) {
+        // Apuestas altas (>= 10): ser mas selectivo, tender a aceptar o fold
+        if (currentBet >= 10) {
+            if (fuerza >= (ORDAGO.aceptar[lance] || 85)) {
                 return { action: ACCION.QUIERO, amount: currentBet };
             }
-            return { action: ACCION.NO_QUIERO, amount: 0 };
-        }
-
-        // Media-baja (35-50): aceptar apuestas pequeñas
-        if (f < 50) {
-            if (currentBet <= 4) return { action: ACCION.QUIERO, amount: currentBet };
-            if (Math.random() < 0.3) return { action: ACCION.QUIERO, amount: currentBet };
-            return { action: ACCION.NO_QUIERO, amount: 0 };
-        }
-
-        // Media (50-65): aceptar, a veces subir
-        if (f < 65) {
-            if (Math.random() < 0.3) {
-                return { action: ACCION.ENVIDO, amount: currentBet + 2 };
+            if (margen >= 20) {
+                if (Math.random() < 0.6) return { action: ACCION.QUIERO, amount: currentBet };
+                return { action: ACCION.NO_QUIERO, amount: 0 };
             }
-            return { action: ACCION.QUIERO, amount: currentBet };
+            return { action: ACCION.NO_QUIERO, amount: 0 };
         }
 
-        // Fuerte (65-80): subir
-        if (f < 80) {
-            return { action: ACCION.ENVIDO, amount: Math.min(currentBet + 3, ctx.piedrasRestantes) };
+        // Escalar aceptacion por tamaño de apuesta: mayor apuesta = mas margen necesario
+        const margenNecesario = Math.min(currentBet * 3, 30);
+
+        if (margen < margenNecesario) {
+            // No suficiente margen para esta apuesta
+            if (currentBet <= 2 && margen >= 0) return { action: ACCION.QUIERO, amount: currentBet };
+            if (currentBet <= 4 && margen >= 5) return { action: ACCION.QUIERO, amount: currentBet };
+            return { action: ACCION.NO_QUIERO, amount: 0 };
         }
 
-        // Muy fuerte (80+): subir mucho, quizas contra-ordago
-        // Contra-ordago solo si fuerza bruta es de elite Y apuesta ya es alta
-        if (fuerza >= (ORDAGO.apertura[lance]?.umbral || 97) && currentBet >= 5) {
-            if (!ctx.zonaAdentro && Math.random() < 0.30) {
+        // Contra-ordago: solo con mano de elite y apuesta ya alta
+        if (fuerza >= (ORDAGO.apertura[lance]?.umbral || 97) && currentBet >= 5 && !ctx.zonaAdentro) {
+            if (Math.random() < 0.25) {
                 return { action: ACCION.ORDAGO, amount: ctx.piedrasRestantes };
             }
         }
 
-        return { action: ACCION.ENVIDO, amount: Math.min(currentBet + 5, ctx.piedrasRestantes) };
+        // Suficiente margen: decidir entre aceptar y subir
+        if (margen >= 30 && Math.random() < 0.45) {
+            return { action: ACCION.ENVIDO, amount: Math.min(currentBet + 4, ctx.piedrasRestantes) };
+        }
+        if (margen >= 15 && Math.random() < 0.30) {
+            return { action: ACCION.ENVIDO, amount: Math.min(currentBet + 2, ctx.piedrasRestantes) };
+        }
+
+        // Por defecto: aceptar (no siempre subir, para evitar bucles infinitos)
+        return { action: ACCION.QUIERO, amount: currentBet };
     }
 
     // ==========================================

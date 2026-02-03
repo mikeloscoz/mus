@@ -394,7 +394,9 @@ class MusController {
         if (this.elements.grupoEnvite) this.elements.grupoEnvite.style.display = 'none';
         if (this.elements.grupoExtra) this.elements.grupoExtra.style.display = 'none';
 
-        // Mostrar el solicitado solo si es turno del humano
+        // Resetear estado de botones de envite
+        this._resetEnviteButtons();
+
         const isHumanTurn = this.currentTurn === 'player';
 
         switch(group) {
@@ -409,21 +411,54 @@ class MusController {
                 }
                 break;
             case 'respuesta':
-                // Los botones de respuesta se muestran cuando hay que responder a un envite
-                if (this.elements.grupoExtra) {
-                    this.elements.grupoExtra.style.display = 'flex';
-                    if (this.elements.btnQuiero) this.elements.btnQuiero.disabled = false;
-                    if (this.elements.btnNoQuiero) this.elements.btnNoQuiero.disabled = false;
-                }
-                // Mostrar opciones de subida (envido/ordago) salvo si hay ordago activo
-                if (!this.game.ordagoActivo && isHumanTurn) {
-                    if (this.elements.grupoEnvite) {
-                        this.elements.grupoEnvite.style.display = 'flex';
+                // Botones adaptados al contexto de respuesta
+                if (isHumanTurn && this.elements.grupoEnvite) {
+                    this.elements.grupoEnvite.style.display = 'flex';
+
+                    // Paso → NO QUIERO cuando hay apuesta
+                    if (this.elements.btnPaso) {
+                        this.elements.btnPaso.querySelector('.btn-text').textContent = 'NO QUIERO';
+                    }
+
+                    if (this.game.ordagoActivo) {
+                        // Ordago activo: Envido deshabilitado, Ordago → QUIERO
+                        if (this.elements.btnEnvido) this.elements.btnEnvido.disabled = true;
+                        if (this.elements.btnOrdago) {
+                            this.elements.btnOrdago.querySelector('.btn-text').textContent = 'QUIERO';
+                            this.elements.btnOrdago.classList.remove('btn--ordago');
+                            this.elements.btnOrdago.classList.add('btn--quiero');
+                        }
+                    } else {
+                        // Envite normal: mostrar boton QUIERO para aceptar sin subir
+                        if (this.elements.grupoExtra) {
+                            this.elements.grupoExtra.style.display = 'flex';
+                            if (this.elements.btnQuiero) this.elements.btnQuiero.disabled = false;
+                            // Ocultar No Quiero (Paso ya cumple esa funcion)
+                            if (this.elements.btnNoQuiero) this.elements.btnNoQuiero.style.display = 'none';
+                        }
                     }
                 }
                 break;
             case 'none':
                 break;
+        }
+    }
+
+    _resetEnviteButtons() {
+        if (this.elements.btnPaso) {
+            this.elements.btnPaso.querySelector('.btn-text').textContent = 'PASO';
+        }
+        if (this.elements.btnEnvido) {
+            this.elements.btnEnvido.disabled = false;
+        }
+        if (this.elements.btnOrdago) {
+            this.elements.btnOrdago.querySelector('.btn-text').textContent = 'ORDAGO';
+            this.elements.btnOrdago.classList.remove('btn--quiero');
+            this.elements.btnOrdago.classList.add('btn--ordago');
+        }
+        // Restaurar visibilidad del boton No Quiero (oculto en modo respuesta)
+        if (this.elements.btnNoQuiero) {
+            this.elements.btnNoQuiero.style.display = '';
         }
     }
 
@@ -1245,16 +1280,35 @@ class MusController {
         this.waitingForHuman = false;
         this.showButtonGroup('none');
         this.highlightSpeaker('player');
-        this.updatePlayerStatus('player', 'Paso');
-        this.game.handleEnvite('player', ACCIONES_ENVITE.PASO);
 
-        // Quitar de la cola y continuar
-        this.turnQueue.shift();
-        const gen = this.lanceGeneration;
-        setTimeout(() => {
-            if (this.lanceGeneration !== gen) return;
-            this.processNextEnviteTurn();
-        }, 1000);
+        // Si hay apuesta pendiente del rival o ordago activo, Paso = No Quiero
+        const playerTeam = this.game.players['player'].team;
+        const equipoApostador = this.game.enviteActual.equipoApostador;
+        const hayApuestaPendiente = equipoApostador && equipoApostador !== playerTeam && this.game.enviteActual.apuesta > 0;
+
+        if (hayApuestaPendiente || this.game.ordagoActivo) {
+            this.updatePlayerStatus('player', 'No quiero');
+            this.game.handleEnvite('player', ACCIONES_ENVITE.NO_QUIERO);
+
+            if (this.game.faseActual === FASES.ENVITE) {
+                this.turnQueue.shift();
+                const gen = this.lanceGeneration;
+                setTimeout(() => {
+                    if (this.lanceGeneration !== gen) return;
+                    this.processNextEnviteTurn();
+                }, 1000);
+            }
+        } else {
+            this.updatePlayerStatus('player', 'Paso');
+            this.game.handleEnvite('player', ACCIONES_ENVITE.PASO);
+
+            this.turnQueue.shift();
+            const gen = this.lanceGeneration;
+            setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
+                this.processNextEnviteTurn();
+            }, 1000);
+        }
     }
 
     onEnvidoClick() {
@@ -1284,17 +1338,24 @@ class MusController {
         this.waitingForHuman = false;
         this.showButtonGroup('none');
         this.highlightSpeaker('player');
-        this.updatePlayerStatus('player', '¡ORDAGO!');
-        this.game.handleEnvite('player', ACCIONES_ENVITE.ORDAGO);
 
-        // Quitar de la cola y reorganizar para respuesta
-        this.turnQueue.shift();
-        this.reorganizeTurnQueueForResponse('player');
-        const gen = this.lanceGeneration;
-        setTimeout(() => {
-            if (this.lanceGeneration !== gen) return;
-            this.processNextEnviteTurn();
-        }, 1000);
+        if (this.game.ordagoActivo) {
+            // Ordago activo: este boton funciona como QUIERO
+            this.updatePlayerStatus('player', '¡Quiero!');
+            this.game.handleEnvite('player', ACCIONES_ENVITE.QUIERO);
+            // Quiero resuelve el lance, no necesita procesar cola
+        } else {
+            this.updatePlayerStatus('player', '¡ORDAGO!');
+            this.game.handleEnvite('player', ACCIONES_ENVITE.ORDAGO);
+
+            this.turnQueue.shift();
+            this.reorganizeTurnQueueForResponse('player');
+            const gen = this.lanceGeneration;
+            setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
+                this.processNextEnviteTurn();
+            }, 1000);
+        }
     }
 
     onQuieroClick() {
