@@ -34,6 +34,12 @@ class MusController {
         this.declaracionesPares = {};
         this.declaracionesJuego = {};
 
+        // Historial de lances para memoria entre lances
+        this.historialLancesRonda = [];
+
+        // Cola de descarte
+        this.descarteTurnQueue = [];
+
         this.init();
     }
 
@@ -108,6 +114,8 @@ class MusController {
             grupoMus: document.querySelector('.controls-group--mus'),
             grupoEnvite: document.querySelector('.controls-group--envite'),
             grupoExtra: document.querySelector('.controls-group--extra'),
+            grupoDescarte: document.querySelector('.controls-group--descarte'),
+            btnConfirmarDescarte: document.getElementById('btn-confirmar-descarte'),
 
             // Modal de resumen de ronda
             modalResumen: document.getElementById('modal-resumen'),
@@ -135,6 +143,9 @@ class MusController {
 
         // Resumen de ronda
         this.elements.btnContinuar?.addEventListener('click', () => this.onContinuarClick());
+
+        // Descarte
+        this.elements.btnConfirmarDescarte?.addEventListener('click', () => this.onConfirmarDescarteClick());
     }
 
     createGame() {
@@ -149,6 +160,7 @@ class MusController {
         this.game.on('musResponse', (data) => this.onMusResponse(data));
         this.game.on('musCortado', (data) => this.onMusCortado(data));
         this.game.on('descartePhaseStarted', (data) => this.onDescartePhaseStarted(data));
+        this.game.on('cardsDiscarded', (data) => this.onCardsDiscarded(data));
         this.game.on('enviteStarted', (data) => this.onEnviteStarted(data));
         this.game.on('enviteAction', (data) => this.onEnviteAction(data));
         this.game.on('lanceResolved', (data) => this.onLanceResolved(data));
@@ -393,6 +405,7 @@ class MusController {
         if (this.elements.grupoMus) this.elements.grupoMus.style.display = 'none';
         if (this.elements.grupoEnvite) this.elements.grupoEnvite.style.display = 'none';
         if (this.elements.grupoExtra) this.elements.grupoExtra.style.display = 'none';
+        if (this.elements.grupoDescarte) this.elements.grupoDescarte.style.display = 'none';
 
         // Resetear estado de botones de envite
         this._resetEnviteButtons();
@@ -437,6 +450,11 @@ class MusController {
                             if (this.elements.btnNoQuiero) this.elements.btnNoQuiero.style.display = 'none';
                         }
                     }
+                }
+                break;
+            case 'descarte':
+                if (this.elements.grupoDescarte) {
+                    this.elements.grupoDescarte.style.display = 'flex';
                 }
                 break;
             case 'none':
@@ -643,6 +661,7 @@ class MusController {
         this.lanceResults = [];
         this.declaracionesPares = {};
         this.declaracionesJuego = {};
+        this.historialLancesRonda = [];
 
         // Actualizar indicador de mano
         this.updateManoIndicator(data.mano);
@@ -747,10 +766,19 @@ class MusController {
 
     onDescartePhaseStarted(data) {
         console.log('[MUS] Fase de descarte');
-        // TODO: Implementar descarte
-        // Por ahora, procesar descarte de IA automáticamente
+        this.clearAllStatus();
+
+        // Construir cola de descarte desde la mano
+        const manoIndex = this.game.manoIndex;
+        const turnOrder = this.game.turnOrder;
+        this.descarteTurnQueue = [];
+        for (let i = 0; i < 4; i++) {
+            const playerIndex = (manoIndex + i) % 4;
+            this.descarteTurnQueue.push(turnOrder[playerIndex]);
+        }
+
         setTimeout(() => {
-            this.processAIDescarte();
+            this.processNextDescarteTurn();
         }, 500);
     }
 
@@ -1099,6 +1127,15 @@ class MusController {
             puntos: data.puntos
         });
 
+        // Historial para memoria entre lances
+        this.historialLancesRonda.push({
+            lance: data.lance,
+            ganador: data.ganador,
+            puntos: data.puntos,
+            apuestaFinal: this.game.enviteActual.apuesta,
+            respuestas: { ...this.game.enviteActual.respuestas }
+        });
+
         this.clearAllStatus();
         this.clearSpeakerHighlight();
         this.showButtonGroup('none');
@@ -1390,11 +1427,90 @@ class MusController {
 
     // ==================== IA ====================
 
-    processAIDescarte() {
-        // Por ahora, la IA no descarta y vuelve al mus
+    processNextDescarteTurn() {
+        if (this.game.faseActual !== FASES.DESCARTE) return;
+        if (this.descarteTurnQueue.length === 0) return;
+
+        const playerId = this.descarteTurnQueue[0];
+        this.setCurrentTurn(playerId);
+
+        if (playerId === 'player') {
+            this.showButtonGroup('descarte');
+            this.waitingForHuman = true;
+        } else {
+            this.showButtonGroup('none');
+            setTimeout(() => {
+                if (this.game.faseActual !== FASES.DESCARTE) return;
+                this.processAISingleDescarte(playerId);
+            }, this.getAIDelay());
+        }
+    }
+
+    processAISingleDescarte(playerId) {
+        const hand = this.convertHandForAI(this.game.players[playerId].hand);
+        const discards = this.aiPlayers[playerId].selectDiscard(hand);
+        const indices = this.mapAICardsToIndices(discards, this.game.players[playerId].hand);
+
+        this.game.handleDescarte(playerId, indices);
+
+        const statusText = indices.length > 0
+            ? `Cambio ${indices.length}`
+            : 'Me quedo';
+        this.highlightSpeaker(playerId);
+        this.updatePlayerStatus(playerId, statusText);
+
+        this.descarteTurnQueue.shift();
+
         setTimeout(() => {
-            this.game.finishDescarte();
-        }, 500);
+            if (this.game.faseActual !== FASES.DESCARTE) return;
+            this.processNextDescarteTurn();
+        }, 1000);
+    }
+
+    mapAICardsToIndices(aiCards, gameHand) {
+        const indices = [];
+        const used = new Set();
+        for (const aiCard of aiCards) {
+            for (let i = 0; i < gameHand.length; i++) {
+                if (used.has(i)) continue;
+                if (this.getAIRank(gameHand[i].valor) === aiCard.rank && gameHand[i].palo === aiCard.suit) {
+                    indices.push(i);
+                    used.add(i);
+                    break;
+                }
+            }
+        }
+        return indices;
+    }
+
+    onConfirmarDescarteClick() {
+        if (!this.waitingForHuman) return;
+
+        this.waitingForHuman = false;
+        this.showButtonGroup('none');
+
+        const indices = [...this.selectedCards];
+        this.game.handleDescarte('player', indices);
+
+        const statusText = indices.length > 0
+            ? `Cambio ${indices.length}`
+            : 'Me quedo';
+        this.highlightSpeaker('player');
+        this.updatePlayerStatus('player', statusText);
+
+        this.selectedCards.clear();
+        this.descarteTurnQueue.shift();
+
+        setTimeout(() => {
+            if (this.game.faseActual !== FASES.DESCARTE) return;
+            this.processNextDescarteTurn();
+        }, 1000);
+    }
+
+    onCardsDiscarded(data) {
+        const playerId = data.player;
+        const faceUp = (playerId === 'player');
+        this.renderPlayerHand(playerId, this.game.players[playerId].hand, faceUp);
     }
 
     convertHandForAI(hand) {
@@ -1437,6 +1553,12 @@ class MusController {
         const parejaYaEnvido = envite.respuestas[companero] === 'envido' || envite.respuestas[companero] === 'ordago';
         const parejaPaso = envite.respuestas[companero] === 'paso';
 
+        // Apuesta del rival para inferir fuerza
+        let apuestaRival = 0;
+        if (envite.equipoApostador && envite.equipoApostador !== team) {
+            apuestaRival = envite.apuesta;
+        }
+
         return {
             marcadorPropio,
             marcadorRival,
@@ -1446,12 +1568,14 @@ class MusController {
             parejaYaEnvido,
             parejaPaso,
             apuestaActual: envite.apuesta || 0,
+            apuestaRival,
             declaracionesPares: { ...this.declaracionesPares },
             declaracionesJuego: { ...this.declaracionesJuego },
             piedrasRestantes: 40 - marcadorPropio - marcadorRival,
             piedrasEnJuego: 40 - marcadorPropio - marcadorRival,
             equipoRival,
-            companero
+            companero,
+            historialLances: [...this.historialLancesRonda]
         };
     }
 
