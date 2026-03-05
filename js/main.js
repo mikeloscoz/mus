@@ -40,6 +40,20 @@ class MusController {
         // Cola de descarte
         this.descarteTurnQueue = [];
 
+        // ====== FRASES PERSONALIZABLES ======
+        // Edita estos arrays para cambiar las frases de los jugadores IA.
+        // Se elige una frase aleatoria de cada array.
+        this.frases = {
+            mus:       ['Mus', 'Soy Mus', 'Yo Mus'],
+            cortar:    ['Corto', 'Hablando', 'A dar una vuelta', 'Hablando jefe'],
+            paso:      ['Paso', 'Va'],
+            envido:    ['Envido'],
+            mas:       ['{n} más', 'Pues {n} más', 'Y {n} más también'],  // {n} se reemplaza por la cantidad
+            ordago:    ['ORDAGO', '¡Órdago va!'],
+            quiero:    ['Quiero', 'Querer', 'Queremos', 'Las vemos', 'Veo'],
+            noQuiero:  ['No quiero', 'No las veo', 'Ni hablar', '¿Que tiene un nido dice?', 'Llevatelas, anda'],
+        };
+
         this.init();
     }
 
@@ -87,9 +101,7 @@ class MusController {
             // Botones
             btnMus: document.getElementById('btn-mus'),
             btnCortar: document.getElementById('btn-cortar'),
-            btnPaso: document.getElementById('btn-paso'),
             btnEnvido: document.getElementById('btn-envido'),
-            btnOrdago: document.getElementById('btn-ordago'),
             btnQuiero: document.getElementById('btn-quiero'),
             btnNoQuiero: document.getElementById('btn-no-quiero'),
 
@@ -113,9 +125,15 @@ class MusController {
             // Grupos de controles
             grupoMus: document.querySelector('.controls-group--mus'),
             grupoEnvite: document.querySelector('.controls-group--envite'),
-            grupoExtra: document.querySelector('.controls-group--extra'),
             grupoDescarte: document.querySelector('.controls-group--descarte'),
+            grupoEnvidoSub: document.querySelector('.controls-group--envido-sub'),
             btnConfirmarDescarte: document.getElementById('btn-confirmar-descarte'),
+            btnEnvidoCancel: document.getElementById('btn-envido-cancel'),
+            btnEnvidoConfirm: document.getElementById('btn-envido-confirm'),
+            btnEnvidoOrdago: document.getElementById('btn-envido-ordago'),
+            btnEnvidoMinus: document.getElementById('btn-envido-minus'),
+            btnEnvidoPlus: document.getElementById('btn-envido-plus'),
+            envidoAmountDisplay: document.getElementById('envido-amount-display'),
 
             // Modal de resumen de ronda
             modalResumen: document.getElementById('modal-resumen'),
@@ -131,11 +149,16 @@ class MusController {
         this.elements.btnCortar?.addEventListener('click', () => this.onCortarClick());
 
         // Botones de envite
-        this.elements.btnPaso?.addEventListener('click', () => this.onPasoClick());
         this.elements.btnEnvido?.addEventListener('click', () => this.onEnvidoClick());
-        this.elements.btnOrdago?.addEventListener('click', () => this.onOrdagoClick());
         this.elements.btnQuiero?.addEventListener('click', () => this.onQuieroClick());
         this.elements.btnNoQuiero?.addEventListener('click', () => this.onNoQuieroClick());
+
+        // Submenú envido: +/- y acciones
+        this.elements.btnEnvidoMinus?.addEventListener('click', () => this.onEnvidoMinus());
+        this.elements.btnEnvidoPlus?.addEventListener('click', () => this.onEnvidoPlus());
+        this.elements.btnEnvidoConfirm?.addEventListener('click', () => this.onEnvidoConfirmClick());
+        this.elements.btnEnvidoOrdago?.addEventListener('click', () => this.onEnvidoOrdagoClick());
+        this.elements.btnEnvidoCancel?.addEventListener('click', () => this.onEnvidoCancelClick());
 
         // Modal
         this.elements.modalAccept?.addEventListener('click', () => this.hideModal());
@@ -268,9 +291,10 @@ class MusController {
         const buttons = [
             this.elements.btnMus,
             this.elements.btnCortar,
-            this.elements.btnPaso,
+            this.elements.btnNoQuiero,
             this.elements.btnEnvido,
-            this.elements.btnOrdago
+            this.elements.btnOrdago,
+            this.elements.btnQuiero
         ];
 
         buttons.forEach(btn => {
@@ -404,8 +428,8 @@ class MusController {
         // Ocultar todos
         if (this.elements.grupoMus) this.elements.grupoMus.style.display = 'none';
         if (this.elements.grupoEnvite) this.elements.grupoEnvite.style.display = 'none';
-        if (this.elements.grupoExtra) this.elements.grupoExtra.style.display = 'none';
         if (this.elements.grupoDescarte) this.elements.grupoDescarte.style.display = 'none';
+        if (this.elements.grupoEnvidoSub) this.elements.grupoEnvidoSub.style.display = 'none';
 
         // Resetear estado de botones de envite
         this._resetEnviteButtons();
@@ -419,42 +443,46 @@ class MusController {
                 }
                 break;
             case 'envite':
+                // Apertura: PASO + ENVIDO
                 if (this.elements.grupoEnvite && isHumanTurn) {
                     this.elements.grupoEnvite.style.display = 'flex';
+                    if (this.elements.btnNoQuiero) {
+                        this.elements.btnNoQuiero.querySelector('.btn-text').textContent = 'PASO';
+                        this.elements.btnNoQuiero.style.display = '';
+                    }
+                    if (this.elements.btnEnvido) this.elements.btnEnvido.style.display = '';
+                    if (this.elements.btnQuiero) this.elements.btnQuiero.style.display = 'none';
                 }
                 break;
             case 'respuesta':
-                // Botones adaptados al contexto de respuesta
                 if (isHumanTurn && this.elements.grupoEnvite) {
                     this.elements.grupoEnvite.style.display = 'flex';
-
-                    // Paso → NO QUIERO cuando hay apuesta
-                    if (this.elements.btnPaso) {
-                        this.elements.btnPaso.querySelector('.btn-text').textContent = 'NO QUIERO';
+                    if (this.elements.btnNoQuiero) {
+                        this.elements.btnNoQuiero.querySelector('.btn-text').textContent = 'NO QUIERO';
+                        this.elements.btnNoQuiero.style.display = '';
                     }
-
                     if (this.game.ordagoActivo) {
-                        // Ordago activo: Envido deshabilitado, Ordago → QUIERO
-                        if (this.elements.btnEnvido) this.elements.btnEnvido.disabled = true;
-                        if (this.elements.btnOrdago) {
-                            this.elements.btnOrdago.querySelector('.btn-text').textContent = 'QUIERO';
-                            this.elements.btnOrdago.classList.remove('btn--ordago');
-                            this.elements.btnOrdago.classList.add('btn--quiero');
-                        }
+                        // Ordago activo: solo QUIERO + NO QUIERO
+                        if (this.elements.btnEnvido) this.elements.btnEnvido.style.display = 'none';
                     } else {
-                        // Envite normal: mostrar boton QUIERO para aceptar sin subir
-                        if (this.elements.grupoExtra) {
-                            this.elements.grupoExtra.style.display = 'flex';
-                            if (this.elements.btnQuiero) this.elements.btnQuiero.disabled = false;
-                            // Ocultar No Quiero (Paso ya cumple esa funcion)
-                            if (this.elements.btnNoQuiero) this.elements.btnNoQuiero.style.display = 'none';
-                        }
+                        // Respuesta a envite: QUIERO + NO QUIERO + ENVIDO
+                        if (this.elements.btnEnvido) this.elements.btnEnvido.style.display = '';
                     }
+                    if (this.elements.btnQuiero) this.elements.btnQuiero.style.display = '';
                 }
                 break;
             case 'descarte':
                 if (this.elements.grupoDescarte) {
                     this.elements.grupoDescarte.style.display = 'flex';
+                }
+                break;
+            case 'envido-sub':
+                if (this.elements.grupoEnvidoSub) {
+                    this.elements.grupoEnvidoSub.style.display = 'flex';
+                }
+                this.envidoSubAmount = 2;
+                if (this.elements.envidoAmountDisplay) {
+                    this.elements.envidoAmountDisplay.textContent = '2';
                 }
                 break;
             case 'none':
@@ -463,20 +491,18 @@ class MusController {
     }
 
     _resetEnviteButtons() {
-        if (this.elements.btnPaso) {
-            this.elements.btnPaso.querySelector('.btn-text').textContent = 'PASO';
+        if (this.elements.btnNoQuiero) {
+            this.elements.btnNoQuiero.querySelector('.btn-text').textContent = 'NO QUIERO';
+            this.elements.btnNoQuiero.style.display = '';
+            this.elements.btnNoQuiero.disabled = false;
         }
         if (this.elements.btnEnvido) {
             this.elements.btnEnvido.disabled = false;
+            this.elements.btnEnvido.style.display = '';
         }
-        if (this.elements.btnOrdago) {
-            this.elements.btnOrdago.querySelector('.btn-text').textContent = 'ORDAGO';
-            this.elements.btnOrdago.classList.remove('btn--quiero');
-            this.elements.btnOrdago.classList.add('btn--ordago');
-        }
-        // Restaurar visibilidad del boton No Quiero (oculto en modo respuesta)
-        if (this.elements.btnNoQuiero) {
-            this.elements.btnNoQuiero.style.display = '';
+        if (this.elements.btnQuiero) {
+            this.elements.btnQuiero.style.display = '';
+            this.elements.btnQuiero.disabled = false;
         }
     }
 
@@ -735,8 +761,8 @@ class MusController {
                 const wantsMus = this.aiPlayers[playerId].decideMus(hand);
 
                 const musPhrase = wantsMus
-                    ? this.randomPhrase(['Mus', 'Mus...', 'Venga, mus'])
-                    : this.randomPhrase(['¡Corto!', 'No hay mus', 'Corto']);
+                    ? this.randomPhrase(this.frases.mus)
+                    : this.randomPhrase(this.frases.cortar);
                 this.highlightSpeaker(playerId);
                 this.updatePlayerStatus(playerId, musPhrase);
                 this.game.handleMus(playerId, wantsMus);
@@ -1009,23 +1035,23 @@ class MusController {
         let statusText = '';
         switch(action) {
             case ACCIONES_ENVITE.PASO:
-                statusText = this.randomPhrase(['Paso', 'Paso...', 'Nada']);
+                statusText = this.randomPhrase(this.frases.paso);
                 break;
             case ACCIONES_ENVITE.ENVIDO:
                 if (this.game.enviteActual.apuesta > 0) {
-                    statusText = `¡${decision.amount || 2} más!`;
+                    statusText = this.randomPhrase(this.frases.mas).replace('{n}', decision.amount || 2);
                 } else {
-                    statusText = 'Envido';
+                    statusText = this.randomPhrase(this.frases.envido);
                 }
                 break;
             case ACCIONES_ENVITE.ORDAGO:
-                statusText = this.randomPhrase(['¡ORDAGO!', '¡Órdago va!', '¡Órdago!']);
+                statusText = this.randomPhrase(this.frases.ordago);
                 break;
             case ACCIONES_ENVITE.QUIERO:
-                statusText = this.randomPhrase(['Quiero', '¡Quiero!', 'Va, quiero']);
+                statusText = this.randomPhrase(this.frases.quiero);
                 break;
             case ACCIONES_ENVITE.NO_QUIERO:
-                statusText = this.randomPhrase(['No quiero', 'No...', 'Me retiro']);
+                statusText = this.randomPhrase(this.frases.noQuiero);
                 break;
         }
         this.highlightSpeaker(playerId);
@@ -1098,16 +1124,7 @@ class MusController {
     }
 
     onEnviteAction(data) {
-        let status = '';
-        switch(data.action) {
-            case 'paso': status = 'Paso'; break;
-            case 'envido': status = `Envido ${data.apuesta}`; break;
-            case 'ordago': status = '¡ORDAGO!'; break;
-            case 'quiero': status = 'Quiero'; break;
-            case 'no_quiero': status = 'No quiero'; break;
-        }
-        this.updatePlayerStatus(data.player, status);
-
+        // Solo actualizar el indicador de envite (NO updatePlayerStatus: ya se hace en processAIEnviteTurn)
         if (data.apuesta && this.elements.valorEnvite) {
             this.elements.valorEnvite.textContent = data.apuesta;
         }
@@ -1311,14 +1328,14 @@ class MusController {
         this.game.handleMus('player', false);
     }
 
-    onPasoClick() {
+    onNoQuieroClick() {
         if (!this.waitingForHuman || this.currentTurn !== 'player') return;
 
         this.waitingForHuman = false;
         this.showButtonGroup('none');
         this.highlightSpeaker('player');
 
-        // Si hay apuesta pendiente del rival o ordago activo, Paso = No Quiero
+        // Si hay apuesta pendiente del rival o ordago activo → NO QUIERO
         const playerTeam = this.game.players['player'].team;
         const equipoApostador = this.game.enviteActual.equipoApostador;
         const hayApuestaPendiente = equipoApostador && equipoApostador !== playerTeam && this.game.enviteActual.apuesta > 0;
@@ -1336,6 +1353,7 @@ class MusController {
                 }, 1000);
             }
         } else {
+            // Sin apuesta → PASO
             this.updatePlayerStatus('player', 'Paso');
             this.game.handleEnvite('player', ACCIONES_ENVITE.PASO);
 
@@ -1350,16 +1368,40 @@ class MusController {
 
     onEnvidoClick() {
         if (!this.waitingForHuman || this.currentTurn !== 'player') return;
+        this.showButtonGroup('envido-sub');
+    }
 
+    onEnvidoMinus() {
+        if (this.envidoSubAmount > 2) {
+            this.envidoSubAmount -= 2;
+            if (this.elements.envidoAmountDisplay) {
+                this.elements.envidoAmountDisplay.textContent = this.envidoSubAmount;
+            }
+        }
+    }
+
+    onEnvidoPlus() {
+        if (this.envidoSubAmount < 38) {
+            this.envidoSubAmount += 2;
+            if (this.elements.envidoAmountDisplay) {
+                this.elements.envidoAmountDisplay.textContent = this.envidoSubAmount;
+            }
+        }
+    }
+
+    onEnvidoConfirmClick() {
+        if (!this.waitingForHuman || this.currentTurn !== 'player') return;
+
+        const increment = this.envidoSubAmount;
         this.waitingForHuman = false;
         this.showButtonGroup('none');
         this.highlightSpeaker('player');
-        const currentBet = this.game.enviteActual.apuesta;
-        const statusText = currentBet > 0 ? '¡2 más!' : 'Envido';
-        this.updatePlayerStatus('player', statusText);
-        this.game.handleEnvite('player', ACCIONES_ENVITE.ENVIDO, 2);
 
-        // Quitar de la cola y reorganizar para respuesta
+        const currentBet = this.game.enviteActual.apuesta;
+        const statusText = currentBet > 0 ? `${increment} mas!` : `Envido`;
+        this.updatePlayerStatus('player', statusText);
+        this.game.handleEnvite('player', ACCIONES_ENVITE.ENVIDO, increment);
+
         this.turnQueue.shift();
         this.reorganizeTurnQueueForResponse('player');
         const gen = this.lanceGeneration;
@@ -1369,30 +1411,29 @@ class MusController {
         }, 1000);
     }
 
-    onOrdagoClick() {
+    onEnvidoOrdagoClick() {
         if (!this.waitingForHuman || this.currentTurn !== 'player') return;
 
         this.waitingForHuman = false;
         this.showButtonGroup('none');
         this.highlightSpeaker('player');
+        this.updatePlayerStatus('player', 'ORDAGO!');
+        this.game.handleEnvite('player', ACCIONES_ENVITE.ORDAGO);
 
-        if (this.game.ordagoActivo) {
-            // Ordago activo: este boton funciona como QUIERO
-            this.updatePlayerStatus('player', '¡Quiero!');
-            this.game.handleEnvite('player', ACCIONES_ENVITE.QUIERO);
-            // Quiero resuelve el lance, no necesita procesar cola
-        } else {
-            this.updatePlayerStatus('player', '¡ORDAGO!');
-            this.game.handleEnvite('player', ACCIONES_ENVITE.ORDAGO);
+        this.turnQueue.shift();
+        this.reorganizeTurnQueueForResponse('player');
+        const gen = this.lanceGeneration;
+        setTimeout(() => {
+            if (this.lanceGeneration !== gen) return;
+            this.processNextEnviteTurn();
+        }, 1000);
+    }
 
-            this.turnQueue.shift();
-            this.reorganizeTurnQueueForResponse('player');
-            const gen = this.lanceGeneration;
-            setTimeout(() => {
-                if (this.lanceGeneration !== gen) return;
-                this.processNextEnviteTurn();
-            }, 1000);
-        }
+    onEnvidoCancelClick() {
+        const playerTeam = this.game.players['player'].team;
+        const equipoApostador = this.game.enviteActual.equipoApostador;
+        const hayApuestaPendiente = equipoApostador && equipoApostador !== playerTeam && this.game.enviteActual.apuesta > 0;
+        this.showButtonGroup(hayApuestaPendiente ? 'respuesta' : 'envite');
     }
 
     onQuieroClick() {
@@ -1403,26 +1444,6 @@ class MusController {
         this.highlightSpeaker('player');
         this.updatePlayerStatus('player', '¡Quiero!');
         this.game.handleEnvite('player', ACCIONES_ENVITE.QUIERO);
-    }
-
-    onNoQuieroClick() {
-        if (!this.waitingForHuman) return;
-
-        this.waitingForHuman = false;
-        this.showButtonGroup('none');
-        this.highlightSpeaker('player');
-        this.updatePlayerStatus('player', 'No quiero');
-        this.game.handleEnvite('player', ACCIONES_ENVITE.NO_QUIERO);
-
-        // Si el compañero puede responder, continuar con la cola
-        if (this.game.faseActual === FASES.ENVITE) {
-            this.turnQueue.shift();
-            const gen = this.lanceGeneration;
-            setTimeout(() => {
-                if (this.lanceGeneration !== gen) return;
-                this.processNextEnviteTurn();
-            }, 1000);
-        }
     }
 
     // ==================== IA ====================
@@ -1834,11 +1855,10 @@ function injectStyles() {
 
         .btn--mus { background: #4CAF50; color: white; }
         .btn--cortar { background: #78909C; color: white; }
-        .btn--paso { background: #607D8B; color: white; }
         .btn--envido { background: #FF9800; color: white; }
         .btn--ordago { background: #E53935; color: white; }
         .btn--quiero { background: #43A047; color: white; }
-        .btn--no-quiero { background: #E53935; color: white; }
+        .btn--no-quiero { background: #607D8B; color: white; }
 
         /* Modales */
         .modal[aria-hidden="true"] { display: none !important; }

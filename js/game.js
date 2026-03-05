@@ -848,8 +848,16 @@ class Game {
         this.enviteActual.esperandoRespuesta = false;
         this.ordagoActivo = false;
 
-        const puntos = this.enviteActual.apuestaAnterior > 0 ? this.enviteActual.apuestaAnterior : 1;
+        let puntos = this.enviteActual.apuestaAnterior > 0 ? this.enviteActual.apuestaAnterior : 1;
         const equipoGanador = this.enviteActual.equipoApostador;
+
+        // Pares/Juego: tantos siempre se cobran ademas del deje (regla oficial)
+        if (this.lanceActual === LANCES.PARES) {
+            puntos += this._getPuntosParesEquipo(equipoGanador);
+        } else if (this.lanceActual === LANCES.JUEGO) {
+            puntos += this._getPuntosJuegoEquipo(equipoGanador);
+        }
+
         this.puntosPendientes[equipoGanador] += puntos;
 
         this.emit('lanceResolved', {
@@ -904,8 +912,8 @@ class Game {
 
             case LANCES.JUEGO:
                 ganador = this.resolverJuego();
-                // Juego de 31 = 3 piedras, resto de juego = 2 piedras (regla oficial)
-                puntos = this._getMejorValorJuegoDelEquipo(ganador) === 31 ? 3 : 2;
+                // Sumar tantos de juego de AMBOS jugadores del equipo (regla oficial)
+                puntos = this._getPuntosJuegoEquipo(ganador);
                 if (this.enviteActual.apuesta > 0) {
                     puntos += this.enviteActual.apuesta;
                 }
@@ -913,11 +921,8 @@ class Game {
 
             case LANCES.PUNTO:
                 ganador = this.resolverPunto();
-                // Punto: 1 piedra base + envites
-                puntos = 1;
-                if (this.enviteActual.apuesta > 0) {
-                    puntos += this.enviteActual.apuesta;
-                }
+                // Punto: 1 piedra si paso, o el envite si se acepta
+                puntos = this.enviteActual.apuesta > 0 ? this.enviteActual.apuesta : 1;
                 break;
         }
 
@@ -1464,6 +1469,23 @@ class Game {
             }
         }
         return mejorValor;
+    }
+
+    /**
+     * Suma los tantos de juego de ambos jugadores del equipo (regla oficial)
+     * Juego de 31 = 3 piedras, otro juego = 2 piedras, sin juego = 0
+     */
+    _getPuntosJuegoEquipo(equipo) {
+        let total = 0;
+        for (const playerId in this.players) {
+            if (this.players[playerId].team === equipo) {
+                const valor = this.getValorJuego(this.players[playerId].hand);
+                if (valor >= 31) {
+                    total += valor === 31 ? 3 : 2;
+                }
+            }
+        }
+        return total;
     }
 
     // ==================== UTILIDADES ====================

@@ -138,25 +138,31 @@
 
             <!-- Controles de envite -->
             <div class="controls-group controls-group--envite">
-                <button type="button" class="btn btn--paso" id="btn-paso">
-                    <span class="btn-text">PASO</span>
-                </button>
-                <button type="button" class="btn btn--envido" id="btn-envido">
-                    <span class="btn-text">ENVIDO</span>
-                </button>
-                <button type="button" class="btn btn--ordago" id="btn-ordago">
-                    <span class="btn-text">ORDAGO</span>
-                </button>
+                <div class="envite-row">
+                    <button type="button" class="btn btn--no-quiero" id="btn-no-quiero">
+                        <span class="btn-text">PASO</span>
+                    </button>
+                    <button type="button" class="btn btn--envido" id="btn-envido">
+                        <span class="btn-text">ENVIDO</span>
+                    </button>
+                    <button type="button" class="btn btn--quiero" id="btn-quiero">
+                        <span class="btn-text">QUIERO</span>
+                    </button>
+                </div>
             </div>
 
-            <!-- Controles adicionales -->
-            <div class="controls-group controls-group--extra">
-                <button type="button" class="btn btn--quiero" id="btn-quiero" disabled>
-                    <span class="btn-text">QUIERO</span>
-                </button>
-                <button type="button" class="btn btn--no-quiero" id="btn-no-quiero" disabled>
-                    <span class="btn-text">NO QUIERO</span>
-                </button>
+            <!-- Submenú de envido (cantidad) -->
+            <div class="controls-group controls-group--envido-sub" style="display:none">
+                <div class="envido-selector">
+                    <button type="button" class="btn btn--envido-arrow" id="btn-envido-minus">&minus;</button>
+                    <span class="envido-amount-display" id="envido-amount-display">2</span>
+                    <button type="button" class="btn btn--envido-arrow" id="btn-envido-plus">&plus;</button>
+                </div>
+                <div class="envido-sub-actions">
+                    <button type="button" class="btn btn--cortar" id="btn-envido-cancel">VOLVER</button>
+                    <button type="button" class="btn btn--envido" id="btn-envido-confirm">ENVIDAR</button>
+                    <button type="button" class="btn btn--ordago" id="btn-envido-ordago">ORDAGO</button>
+                </div>
             </div>
 
             <!-- Controles de descarte -->

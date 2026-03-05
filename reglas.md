@@ -91,7 +91,16 @@ Declaración "Adentro"
 Cuando al final de un juego parcial una pareja de compañeros ha alcanzado o sobrepasado las 35 piedras (7 amarrakos), uno de ellos debe decir: "Adentro", y a continuación se echan todos los amarrakos al centro de la mesa. Esto tiene por objeto advertir a los jugadores contrarios que se está a punto de ganar el juego completo.
 
 Valor de las jugadas (tabla resumen)
-JugadaValor en piedrasEl no o deje1 piedraLa Grande en paso1 piedraLa Chica en paso1 piedraEl Par1 piedraLas Medias2 piedrasLos Duples3 piedrasJuego (general)2 piedrasJuego de 313 piedrasJuego no o punto1 piedra
+Jugada Valor en piedras
+El no o deje 1 piedra
+La Grande en paso 1 piedra
+La Chica en paso 1 piedra
+El Par 1 piedra
+Las Medias 2 piedras
+Los Duples 3 piedras
+Juego (general) 2 piedras
+Juego de 31 3 piedras
+Juego no o punto 1 piedra
 
 Normas de cobro de las jugadas
 Grande y Chica

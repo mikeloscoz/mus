@@ -146,18 +146,29 @@ body {
 .player-area--left { grid-area: left; }
 .player-area--right { grid-area: right; }
 
-/* Cartas mas pequenas en las zonas laterales para caber horizontal */
+/* Cartas laterales giradas 90 grados */
 .player-area--left .card,
 .player-area--right .card {
     width: 40px;
     height: 60px;
+    transform: rotate(90deg);
 }
 
-/* Manos laterales en horizontal con overlap */
+/* Manos laterales apiladas */
 .player-area--left .player-hand,
 .player-area--right .player-hand {
-    flex-wrap: wrap;
-    gap: 2px;
+    flex-direction: column;
+    gap: 0;
+}
+
+.player-area--left .player-hand .card,
+.player-area--right .player-hand .card {
+    margin-top: -45px;
+}
+
+.player-area--left .player-hand .card:first-child,
+.player-area--right .player-hand .card:first-child {
+    margin-top: 0;
 }
 
 .player-info {
@@ -411,17 +422,76 @@ body {
     border-radius: 8px;
     margin-top: 6px;
     flex-shrink: 0;
+    min-height: 62px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .controls-group {
     display: none;
-    justify-content: center;
-    gap: 10px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
 }
 
 .controls-group--mus {
     display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 10px;
+}
+
+.controls-group--descarte {
+    flex-direction: row;
+    justify-content: center;
+    gap: 10px;
+}
+
+.controls-group--envido-sub {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.envite-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* Selector de cantidad envido (+/-) */
+.envido-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn--envido-arrow {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 20px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #455A64;
+    color: white;
+}
+
+.envido-amount-display {
+    font-size: 28px;
+    font-weight: bold;
+    color: #FFD700;
+    min-width: 40px;
+    text-align: center;
+}
+
+.envido-sub-actions {
+    display: flex;
+    gap: 8px;
 }
 
 /* ===== BOTONES ===== */
@@ -432,18 +502,20 @@ body {
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     text-transform: uppercase;
     letter-spacing: 1px;
 }
 
 .btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    filter: brightness(1.15);
 }
 
 .btn:active:not(:disabled) {
-    transform: translateY(-1px);
+    transform: translateY(-1px) scale(0.98);
+    transition-duration: 0.1s;
 }
 
 .btn:disabled {
@@ -453,11 +525,10 @@ body {
 
 .btn--mus { background: #4CAF50; color: white; }
 .btn--cortar { background: #78909C; color: white; }
-.btn--paso { background: #607D8B; color: white; }
 .btn--envido { background: #FF9800; color: white; }
 .btn--ordago { background: #E53935; color: white; }
 .btn--quiero { background: #43A047; color: white; }
-.btn--no-quiero { background: #E53935; color: white; }
+.btn--no-quiero { background: #607D8B; color: white; }
 .btn--primary { background: #2196F3; color: white; }
 
 /* ===== INDICADOR DE TURNO (oculto - reemplazado por resaltado de nombre) ===== */
@@ -467,17 +538,20 @@ body {
 
 /* ===== MODALES ===== */
 .modal {
-    display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0,0,0,0);
+    display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
+    pointer-events: none;
+    transition: background 0.35s ease;
 }
 
 .modal[aria-hidden="false"] {
-    display: flex;
+    background: rgba(0,0,0,0.7);
+    pointer-events: auto;
 }
 
 .modal-overlay {
@@ -494,6 +568,14 @@ body {
     width: 90%;
     text-align: center;
     box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    transform: scale(0.8) translateY(20px);
+    opacity: 0;
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+}
+
+.modal[aria-hidden="false"] .modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
 }
 
 .modal-header {
@@ -579,6 +661,48 @@ body {
 .modal-footer--ordago {
     gap: 15px;
 }
+
+/* ===== ANIMACIONES ===== */
+
+/* Controls group slide-in */
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.controls-group[style*="display: flex"],
+.controls-group--mus {
+    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Card hover glow */
+.card--front:hover {
+    box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
+}
+
+/* Score bar pulse on update */
+@keyframes scorePulse {
+    0% { filter: brightness(1); }
+    50% { filter: brightness(1.5); }
+    100% { filter: brightness(1); }
+}
+
+.score-bar-fill.score-updated {
+    animation: scorePulse 0.6s ease;
+}
+
+/* Resumen table rows */
+.resumen-table tbody tr {
+    transition: background 0.2s;
+}
+
+.resumen-table tbody tr:hover {
+    background: rgba(255,255,255,0.05);
+}
+
+.resumen-nosotros { color: #4CAF50; font-weight: bold; }
+.resumen-ellos { color: #f44336; font-weight: bold; }
+.resumen-totals { border-top: 1px solid #555; font-weight: bold; }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
