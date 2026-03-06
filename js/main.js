@@ -255,22 +255,14 @@ class MusController {
 
         // Quitar resaltado de todos los jugadores
         ['player', 'partner', 'rival1', 'rival2'].forEach(p => {
-            const area = this.getPlayerArea(p);
             const nameEl = this.getPlayerNameElement(p);
-            if (area) {
-                area.classList.remove('player-area--active-turn');
-            }
             if (nameEl) {
                 nameEl.classList.remove('player-name--active');
             }
         });
 
-        // Resaltar area y nombre del jugador actual
-        const currentArea = this.getPlayerArea(playerId);
+        // Resaltar nombre del jugador actual
         const currentNameEl = this.getPlayerNameElement(playerId);
-        if (currentArea) {
-            currentArea.classList.add('player-area--active-turn');
-        }
         if (currentNameEl) {
             currentNameEl.classList.add('player-name--active');
         }
@@ -1622,11 +1614,11 @@ function injectStyles() {
         #mano-pareja .card,
         #mano-rival1 .card,
         #mano-rival2 .card {
-            width: 70px;
-            height: 105px;
-            border-radius: 8px;
+            width: 60px;
+            height: 90px;
+            border-radius: 6px;
             border: none;
-            margin: 0 5px;
+            margin: 0 3px;
             display: inline-block;
             padding: 0;
             box-sizing: border-box;
@@ -1638,105 +1630,13 @@ function injectStyles() {
             background: transparent;
         }
 
-        .card-img {
-            width: 100%;
-            height: 100%;
-            display: block;
-            object-fit: cover;
-            border-radius: 8px;
-            pointer-events: none;
-        }
-
-        .card--front:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-        }
-
-        .card--selected {
-            transform: translateY(-15px) !important;
-            box-shadow: 0 15px 30px rgba(0,0,0,0.4) !important;
-            outline: 3px solid #4CAF50;
-        }
-
-        /* Manos de jugadores */
-        .player-hand {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-wrap: nowrap;
-            min-height: 120px;
-        }
-
-        .player-hand--vertical {
-            flex-direction: column;
-        }
-
-        .player-hand--vertical .card {
-            margin: -20px 0;
-        }
-
-        /* Speech bubble styles are in css/style.css */
-        /* Override: ensure player-info allows overflow for bubbles */
-        .player-info {
-            position: relative;
-            overflow: visible;
-        }
-
         /* Nombre del jugador que esta hablando */
         .player-name--speaking {
             color: #FFD700 !important;
-            font-weight: bold !important;
             text-shadow: 0 0 8px rgba(255, 215, 0, 0.6) !important;
         }
 
-        /* Indicador de turno activo */
-        .player-area--active-turn {
-            position: relative;
-        }
-
-        .player-area--active-turn::after {
-            content: '';
-            position: absolute;
-            top: -5px;
-            left: -5px;
-            right: -5px;
-            bottom: -5px;
-            border: 3px solid #4CAF50;
-            border-radius: 10px;
-            animation: turnPulse 1.5s ease-in-out infinite;
-            pointer-events: none;
-        }
-
-        @keyframes turnPulse {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
-        }
-
-        /* Nombre del jugador activo - MUY VISIBLE */
-        .player-name--active {
-            color: #4CAF50 !important;
-            font-size: 16px !important;
-            font-weight: bold !important;
-            text-shadow: 0 0 10px rgba(76, 175, 80, 0.8), 0 0 20px rgba(76, 175, 80, 0.4) !important;
-            animation: nameGlow 1.5s ease-in-out infinite;
-            position: relative;
-            padding: 2px 10px;
-            background: rgba(76, 175, 80, 0.15);
-            border-radius: 12px;
-            display: inline-block;
-        }
-
-        .player-name--active::before {
-            content: '\u25B6';
-            margin-right: 4px;
-            font-size: 10px;
-            vertical-align: middle;
-        }
-
-        @keyframes nameGlow {
-            0%, 100% { text-shadow: 0 0 10px rgba(76, 175, 80, 0.8), 0 0 20px rgba(76, 175, 80, 0.4); }
-            50% { text-shadow: 0 0 15px rgba(76, 175, 80, 1), 0 0 30px rgba(76, 175, 80, 0.6); }
-        }
+        /* Indicador de turno activo - solo via CSS en style.css */
 
         /* Ocultar indicador flotante viejo */
         #indicador-turno {
@@ -1790,10 +1690,10 @@ function injectStyles() {
             50% { transform: translateX(-50%) scale(1.05); }
         }
 
-        /* Mensaje informativo - grande y visible, centrado en la mesa */
+        /* Mensaje informativo - grande y visible, centrado en la mesa pero arriba */
         .info-message {
             position: fixed;
-            top: 50%;
+            top: 35%;
             left: 50%;
             transform: translate(-50%, -50%) scale(0.9);
             background: rgba(0, 0, 0, 0.9);
@@ -1817,73 +1717,34 @@ function injectStyles() {
             transform: translate(-50%, -50%) scale(1);
         }
 
-        /* Grupos de botones */
-        .controls-group {
-            display: none;
-            justify-content: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
+        /* Grupos de botones - estilos base en style.css */
 
-        .controls-group--mus {
-            display: flex;
-        }
+        /* Botones - tamaños base en style.css */
 
-        /* Botones */
-        .btn {
-            padding: 14px 28px;
-            font-size: 16px;
-            font-weight: bold;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
+        /* Colores de botones en style.css */
 
-        .btn:hover:not(:disabled) {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-
-        .btn--mus { background: #4CAF50; color: white; }
-        .btn--cortar { background: #78909C; color: white; }
-        .btn--envido { background: #FF9800; color: white; }
-        .btn--ordago { background: #E53935; color: white; }
-        .btn--quiero { background: #43A047; color: white; }
-        .btn--no-quiero { background: #607D8B; color: white; }
-
-        /* Modales */
-        .modal[aria-hidden="true"] { display: none !important; }
-        .modal[aria-hidden="false"] { display: flex !important; }
+        /* Modales - usar pointer-events + opacity para transiciones suaves */
+        .modal[aria-hidden="true"] { pointer-events: none; }
+        .modal[aria-hidden="false"] { pointer-events: auto; }
 
         /* Responsive */
         @media (max-width: 768px) {
-            .card, #mano-jugador .card, #mano-pareja .card,
+            #mano-jugador .card, #mano-pareja .card,
             #mano-rival1 .card, #mano-rival2 .card {
-                width: 55px;
-                height: 82px;
-                margin: 0 3px;
+                width: 50px;
+                height: 75px;
+                margin: 0 2px;
             }
-            .btn { padding: 10px 18px; font-size: 13px; }
             .mano-badge { font-size: 8px; padding: 1px 4px; }
         }
 
         @media (max-width: 480px) {
-            .card, #mano-jugador .card, #mano-pareja .card,
+            #mano-jugador .card, #mano-pareja .card,
             #mano-rival1 .card, #mano-rival2 .card {
-                width: 48px;
-                height: 72px;
-                margin: 0 2px;
+                width: 44px;
+                height: 66px;
+                margin: 0 1px;
             }
-            .btn { padding: 8px 14px; font-size: 12px; }
         }
 
         /* Resumen de ronda */
