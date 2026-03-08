@@ -101,6 +101,7 @@ class MusController {
             // Botones
             btnMus: document.getElementById('btn-mus'),
             btnCortar: document.getElementById('btn-cortar'),
+            btnForceMus: document.getElementById('btn-force-mus'),
             btnEnvido: document.getElementById('btn-envido'),
             btnQuiero: document.getElementById('btn-quiero'),
             btnNoQuiero: document.getElementById('btn-no-quiero'),
@@ -147,6 +148,7 @@ class MusController {
         // Botones de MUS
         this.elements.btnMus?.addEventListener('click', () => this.onMusClick());
         this.elements.btnCortar?.addEventListener('click', () => this.onCortarClick());
+        this.elements.btnForceMus?.addEventListener('click', () => this.onForceMusClick());
 
         // Botones de envite
         this.elements.btnEnvido?.addEventListener('click', () => this.onEnvidoClick());
@@ -527,7 +529,7 @@ class MusController {
      * @param {Function} callback - Funcion a ejecutar cuando termina la secuencia
      * @param {number} delay - Delay entre frases en ms (default 800)
      */
-    speakSequence(speeches, callback, delay = 1000) {
+    speakSequence(speeches, callback, delay = 800) {
         this.clearAllStatus();
         let index = 0;
         const gen = this.lanceGeneration;
@@ -830,10 +832,10 @@ class MusController {
 
             if (data.lance === LANCES.PARES) {
                 this.detectarYMostrarPares().then(startTurnSequence);
-            } else if (data.lance === LANCES.JUEGO || data.lance === LANCES.PUNTO) {
+            } else if (data.lance === LANCES.JUEGO) {
                 this.detectarYMostrarJuego().then(startTurnSequence);
             } else {
-                // Grande y Chica: directamente a turnos
+                // Grande, Chica y Punto: directamente a turnos
                 startTurnSequence();
             }
         }, 1500);
@@ -852,7 +854,7 @@ class MusController {
                 const pares = this.game.getPares(this.game.players[playerId].hand);
                 const tienePares = pares.tipo ? 'si' : 'no';
                 this.declaracionesPares[playerId] = tienePares;
-                const text = pares.tipo ? 'Sí' : 'No';
+                const text = pares.tipo ? 'Si' : 'No';
                 speeches.push({ playerId, text });
             }
 
@@ -1320,6 +1322,40 @@ class MusController {
         this.game.handleMus('player', false);
     }
 
+    onForceMusClick() {
+        if (this.game.faseActual !== FASES.MUS) return;
+
+        this.waitingForHuman = false;
+        this.showButtonGroup('none');
+
+        // Forzar mus para todos los jugadores que faltan por responder
+        const turnOrder = this.game.turnOrder;
+        const manoIndex = this.game.manoIndex;
+
+        const forceNext = (i) => {
+            if (this.game.faseActual !== FASES.MUS) return; // Ya se completo
+            const playerIndex = (manoIndex + i) % 4;
+            const playerId = turnOrder[playerIndex];
+
+            // Si ya respondio, saltar
+            if (this.game.musResponses[playerId] !== undefined) {
+                if (i < 3) forceNext(i + 1);
+                return;
+            }
+
+            const phrase = this.randomPhrase(this.frases.mus);
+            this.highlightSpeaker(playerId);
+            this.updatePlayerStatus(playerId, phrase);
+            this.game.handleMus(playerId, true);
+
+            if (i < 3 && this.game.faseActual === FASES.MUS) {
+                setTimeout(() => forceNext(i + 1), 300);
+            }
+        };
+
+        forceNext(0);
+    }
+
     onNoQuieroClick() {
         if (!this.waitingForHuman || this.currentTurn !== 'player') return;
 
@@ -1609,16 +1645,16 @@ class MusController {
 function injectStyles() {
     const style = document.createElement('style');
     style.textContent = `
-        /* Cartas con imagenes */
+        /* Cartas con imagenes - tamaño unificado con style.css */
         #mano-jugador .card,
         #mano-pareja .card,
         #mano-rival1 .card,
         #mano-rival2 .card {
-            width: 60px;
-            height: 90px;
+            width: 68px;
+            height: 100px;
             border-radius: 6px;
             border: none;
-            margin: 0 3px;
+            margin: 0 2px;
             display: inline-block;
             padding: 0;
             box-sizing: border-box;
@@ -1731,8 +1767,8 @@ function injectStyles() {
         @media (max-width: 768px) {
             #mano-jugador .card, #mano-pareja .card,
             #mano-rival1 .card, #mano-rival2 .card {
-                width: 50px;
-                height: 75px;
+                width: 55px;
+                height: 82px;
                 margin: 0 2px;
             }
             .mano-badge { font-size: 8px; padding: 1px 4px; }
@@ -1741,8 +1777,8 @@ function injectStyles() {
         @media (max-width: 480px) {
             #mano-jugador .card, #mano-pareja .card,
             #mano-rival1 .card, #mano-rival2 .card {
-                width: 44px;
-                height: 66px;
+                width: 48px;
+                height: 72px;
                 margin: 0 1px;
             }
         }
