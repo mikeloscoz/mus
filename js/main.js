@@ -92,6 +92,8 @@ class MusController {
             piedrasEllos: document.getElementById('piedras-ellos'),
             barNosotros: document.getElementById('bar-nosotros'),
             barEllos: document.getElementById('bar-ellos'),
+            piedrasVisualNosotros: document.getElementById('piedras-visual-nosotros'),
+            piedrasVisualEllos: document.getElementById('piedras-visual-ellos'),
 
             // Estado del juego
             lanceActual: document.getElementById('lance-actual'),
@@ -345,7 +347,7 @@ class MusController {
         return map[playerId];
     }
 
-    renderPlayerHand(playerId, cards, faceUp = false) {
+    renderPlayerHand(playerId, cards, faceUp = false, animate = false) {
         const handElement = this.getHandElement(playerId);
         if (!handElement) {
             console.warn('No se encontró elemento para', playerId);
@@ -359,7 +361,22 @@ class MusController {
             if (playerId === 'player' && faceUp) {
                 cardEl.addEventListener('click', () => this.onCardClick(index, cardEl));
             }
+
+            // Deal animation: start invisible, then animate in with stagger
+            if (animate) {
+                cardEl.classList.add('card--dealing');
+            }
+
             handElement.appendChild(cardEl);
+
+            if (animate) {
+                const playerDelay = { 'player': 0, 'partner': 80, 'rival1': 160, 'rival2': 240 };
+                const delay = (playerDelay[playerId] || 0) + index * 60;
+                setTimeout(() => {
+                    cardEl.classList.remove('card--dealing');
+                    cardEl.classList.add('card--deal-animate');
+                }, delay);
+            }
         });
     }
 
@@ -401,6 +418,25 @@ class MusController {
         }
         if (this.elements.barEllos) {
             this.elements.barEllos.style.width = `${(piedras.equipo2 / 40) * 100}%`;
+        }
+
+        // Visual piedras (stones)
+        this._renderPiedrasVisual(this.elements.piedrasVisualNosotros, piedras.equipo1);
+        this._renderPiedrasVisual(this.elements.piedrasVisualEllos, piedras.equipo2);
+    }
+
+    _renderPiedrasVisual(container, count) {
+        if (!container) return;
+        const current = container.children.length;
+        // Add new stones
+        for (let i = current; i < count; i++) {
+            const stone = document.createElement('span');
+            stone.className = 'piedra piedra--new';
+            container.appendChild(stone);
+        }
+        // Remove excess stones
+        while (container.children.length > count) {
+            container.removeChild(container.lastChild);
         }
     }
 
@@ -644,6 +680,50 @@ class MusController {
         if (this.elements.modalResultado) {
             this.elements.modalResultado.setAttribute('aria-hidden', 'true');
         }
+        // Remove particles
+        document.querySelector('.particles-container')?.remove();
+    }
+
+    // Confetti/sparkle particle effect
+    spawnParticles(isVictory = true) {
+        let container = document.querySelector('.particles-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'particles-container';
+            document.body.appendChild(container);
+        }
+        container.innerHTML = '';
+
+        const colors = isVictory
+            ? ['#FFD700', '#66BB6A', '#4CAF50', '#FFF176', '#81C784', '#FFEB3B']
+            : ['#EF5350', '#FF7043', '#FF8A65', '#FFAB91', '#CE93D8'];
+
+        const count = 60;
+        for (let i = 0; i < count; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const size = 4 + Math.random() * 8;
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const left = Math.random() * 100;
+            const duration = 2 + Math.random() * 2;
+            const delay = Math.random() * 1.5;
+            const shape = Math.random() > 0.5 ? '50%' : '2px';
+
+            p.style.cssText = `
+                left: ${left}%;
+                top: -${size}px;
+                width: ${size}px;
+                height: ${size}px;
+                background: ${color};
+                border-radius: ${shape};
+                animation-duration: ${duration}s;
+                animation-delay: ${delay}s;
+            `;
+            container.appendChild(p);
+        }
+
+        // Auto-cleanup after animation
+        setTimeout(() => container.remove(), 5000);
     }
 
     // Mostrar informacion de deteccion (pares, juego)
@@ -691,13 +771,13 @@ class MusController {
         console.log('[MUS] Cartas repartidas');
         const players = data.players;
 
-        // Jugador humano - cartas boca arriba
-        this.renderPlayerHand('player', players.player.hand, true);
+        // Jugador humano - cartas boca arriba, con animación de reparto
+        this.renderPlayerHand('player', players.player.hand, true, true);
 
-        // IA - cartas SIEMPRE boca abajo durante el juego
-        this.renderPlayerHand('partner', players.partner.hand, false);
-        this.renderPlayerHand('rival1', players.rival1.hand, false);
-        this.renderPlayerHand('rival2', players.rival2.hand, false);
+        // IA - cartas SIEMPRE boca abajo durante el juego, con animación
+        this.renderPlayerHand('partner', players.partner.hand, false, true);
+        this.renderPlayerHand('rival1', players.rival1.hand, false, true);
+        this.renderPlayerHand('rival2', players.rival2.hand, false, true);
     }
 
     onPhaseChanged(data) {
@@ -1266,6 +1346,7 @@ class MusController {
     onGameOver(data) {
         console.log('[MUS] Fin de partida - Ganador:', data.ganador);
         this.showResultModal(data.ganador, data.piedras);
+        this.spawnParticles(data.ganador === 'equipo1');
     }
 
     onTurnChanged(data) {
@@ -1763,23 +1844,52 @@ function injectStyles() {
         .modal[aria-hidden="true"] { pointer-events: none; }
         .modal[aria-hidden="false"] { pointer-events: auto; }
 
-        /* Responsive */
+        /* Responsive - sync with style.css */
         @media (max-width: 768px) {
-            #mano-jugador .card, #mano-pareja .card,
-            #mano-rival1 .card, #mano-rival2 .card {
-                width: 55px;
-                height: 82px;
-                margin: 0 2px;
+            #mano-jugador .card, #mano-pareja .card {
+                width: 52px;
+                height: 78px;
+                margin: 0 1px;
             }
-            .mano-badge { font-size: 8px; padding: 1px 4px; }
+            #mano-rival1 .card, #mano-rival2 .card {
+                width: 38px;
+                height: 57px;
+                margin: 0 1px;
+            }
+            .mano-badge { font-size: 7px; padding: 1px 3px; }
+            .info-message {
+                font-size: 16px;
+                padding: 12px 24px;
+            }
         }
 
-        @media (max-width: 480px) {
-            #mano-jugador .card, #mano-pareja .card,
+        @media (max-width: 400px) {
+            #mano-jugador .card, #mano-pareja .card {
+                width: 44px;
+                height: 66px;
+                margin: 0 1px;
+            }
             #mano-rival1 .card, #mano-rival2 .card {
+                width: 32px;
+                height: 48px;
+                margin: 0;
+            }
+            .info-message {
+                font-size: 14px;
+                padding: 10px 20px;
+            }
+        }
+
+        @media (max-height: 500px) and (orientation: landscape) {
+            #mano-jugador .card, #mano-pareja .card {
                 width: 48px;
                 height: 72px;
                 margin: 0 1px;
+            }
+            #mano-rival1 .card, #mano-rival2 .card {
+                width: 34px;
+                height: 51px;
+                margin: 0;
             }
         }
 
