@@ -41,17 +41,38 @@ class MusController {
         this.descarteTurnQueue = [];
 
         // ====== FRASES PERSONALIZABLES ======
-        // Edita estos arrays para cambiar las frases de los jugadores IA.
+        // ====== FRASES PERSONALIZABLES ======
+        // Edita estos arrays para cambiar las frases de TODOS los jugadores.
         // Se elige una frase aleatoria de cada array.
         this.frases = {
-            mus:       ['Mus', 'Soy Mus', 'Yo Mus'],
-            cortar:    ['Corto', 'Hablando', 'A dar una vuelta', 'Hablando jefe'],
-            paso:      ['Paso', 'Va'],
-            envido:    ['Envido'],
-            mas:       ['{n} más', 'Pues {n} más', 'Y {n} más también'],  // {n} se reemplaza por la cantidad
-            ordago:    ['ORDAGO', '¡Órdago va!'],
-            quiero:    ['Quiero', 'Querer', 'Queremos', 'Las vemos', 'Veo'],
-            noQuiero:  ['No quiero', 'No las veo', 'Ni hablar', '¿Que tiene un nido dice?', 'Llevatelas, anda'],
+            // Fase de mus
+            mus:        ['Mus', 'Soy Mus', 'Yo Mus'],
+            cortar:     ['Corto', 'Hablando', 'A dar una vuelta', 'Hablando jefe'],
+
+            // Envite
+            paso:       ['Paso', 'Va'],
+            envido:     ['Envido', 'Envido va'],
+            mas:        ['{n} más', 'Pues {n} más', 'Y {n} más también'],
+            ordago:     ['ORDAGO'],
+            quiero:     ['Quiero', 'Querer', 'Queremos', 'Las vemos', 'Veo'],
+            noQuiero:   ['No quiero', 'No las veo', 'Ni hablar', '¿Que tiene un nido dice?', 'Llévatelas, anda'],
+
+            // Descarte (por número de cartas)
+            descarte1:  ['Dame 1', 'Una'],
+            descarte2:  ['Dame 2', 'Dos', 'Las dos mejores'],
+            descarte3:  ['Dame 3', 'Tres'],
+            descarte4:  ['Dame 4', 'Las cuatro', 'Todas', 'Traje nuevo'],
+
+            // Anunciar pares
+            paresSi:    ['Sí', 'De campeonato', 'Como robles'],
+            paresNo:    ['No'],
+
+            // Anunciar juego
+            juegoSi:    ['Sí', 'Por supuesto', 'Claro que si'],
+            juegoNo:    ['No'],
+
+            // Mensaje de error
+            descarteObligatorio: ['¡Debes descartarte al menos 1 carta!'],
         };
 
         this.init();
@@ -94,6 +115,16 @@ class MusController {
             barEllos: document.getElementById('bar-ellos'),
             piedrasVisualNosotros: document.getElementById('piedras-visual-nosotros'),
             piedrasVisualEllos: document.getElementById('piedras-visual-ellos'),
+
+            // Tantos (piedras/amarrakos near players)
+            tantosJugador: document.getElementById('tantos-jugador'),
+            tantosPareja: document.getElementById('tantos-pareja'),
+            tantosRival1: document.getElementById('tantos-rival1'),
+            tantosRival2: document.getElementById('tantos-rival2'),
+
+            // Baraja
+            deckArea: document.getElementById('deck-area'),
+            deckStack: document.getElementById('deck-stack'),
 
             // Estado del juego
             lanceActual: document.getElementById('lance-actual'),
@@ -219,6 +250,11 @@ class MusController {
         this.game.piedras = { equipo1: 0, equipo2: 0 };
         this.game.manoIndex = 0;
         this.updateScore();
+        // Clear tantos
+        [this.elements.tantosJugador, this.elements.tantosPareja,
+         this.elements.tantosRival1, this.elements.tantosRival2].forEach(el => {
+            if (el) el.innerHTML = '';
+        });
         this.startGame();
     }
 
@@ -318,6 +354,51 @@ class MusController {
             manoNameEl.innerHTML = `${this.getPlayerName(manoPlayerId)} <span class="mano-badge">MANO</span>`;
             manoNameEl.classList.add('player-name--mano');
         }
+
+        // Move deck to the left of the mano player
+        this.positionDeck(manoPlayerId);
+    }
+
+    positionDeck(manoPlayerId) {
+        const deckEl = this.elements.deckArea;
+        const playerArea = this.getPlayerArea(manoPlayerId);
+        if (!deckEl || !playerArea) return;
+
+        // Move deck inside the mano player's area
+        playerArea.appendChild(deckEl);
+        deckEl.style.position = 'absolute';
+
+        // Position to the LEFT of the mano player (as in real mus)
+        switch (manoPlayerId) {
+            case 'player': // bottom: deck to the right of cards (opposite side of tantos)
+                deckEl.style.left = '';
+                deckEl.style.right = '-50px';
+                deckEl.style.top = '50%';
+                deckEl.style.bottom = '';
+                deckEl.style.transform = 'translateY(-50%)';
+                break;
+            case 'partner': // top: deck to the left of cards (opposite side of tantos)
+                deckEl.style.left = '-50px';
+                deckEl.style.right = '';
+                deckEl.style.top = '50%';
+                deckEl.style.bottom = '';
+                deckEl.style.transform = 'translateY(-50%)';
+                break;
+            case 'rival1': // left: deck above cards
+                deckEl.style.left = '50%';
+                deckEl.style.right = '';
+                deckEl.style.top = '-4px';
+                deckEl.style.bottom = '';
+                deckEl.style.transform = 'translateX(-50%) translateY(-100%)';
+                break;
+            case 'rival2': // right: deck above cards
+                deckEl.style.left = '50%';
+                deckEl.style.right = '';
+                deckEl.style.top = '-4px';
+                deckEl.style.bottom = '';
+                deckEl.style.transform = 'translateX(-50%) translateY(-100%)';
+                break;
+        }
     }
 
     // Delay aleatorio para simular "pensamiento" de la IA
@@ -362,20 +443,38 @@ class MusController {
                 cardEl.addEventListener('click', () => this.onCardClick(index, cardEl));
             }
 
-            // Deal animation: start invisible, then animate in with stagger
-            if (animate) {
-                cardEl.classList.add('card--dealing');
-            }
-
             handElement.appendChild(cardEl);
 
+            // Deal animation: card flies from deck to its position
             if (animate) {
-                const playerDelay = { 'player': 0, 'partner': 80, 'rival1': 160, 'rival2': 240 };
-                const delay = (playerDelay[playerId] || 0) + index * 60;
-                setTimeout(() => {
-                    cardEl.classList.remove('card--dealing');
-                    cardEl.classList.add('card--deal-animate');
-                }, delay);
+                const deckEl = this.elements.deckStack;
+                if (deckEl) {
+                    const deckRect = deckEl.getBoundingClientRect();
+                    const cardRect = cardEl.getBoundingClientRect();
+                    const dx = deckRect.left + deckRect.width / 2 - (cardRect.left + cardRect.width / 2);
+                    const dy = deckRect.top + deckRect.height / 2 - (cardRect.top + cardRect.height / 2);
+
+                    // Start at deck position
+                    cardEl.style.transition = 'none';
+                    cardEl.style.transform = `translate(${dx}px, ${dy}px) scale(0.5)`;
+                    cardEl.style.opacity = '0';
+
+                    const totalDelay = index * 100 + ({'player': 0, 'partner': 300, 'rival1': 150, 'rival2': 450}[playerId] || 0);
+                    setTimeout(() => {
+                        cardEl.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease-out';
+                        cardEl.style.opacity = '1';
+                        // Lateral cards need rotation
+                        const isLateral = playerId === 'rival1' || playerId === 'rival2';
+                        cardEl.style.transform = isLateral ? 'rotate(90deg)' : 'translate(0, 0) scale(1)';
+                    }, totalDelay);
+
+                    // Clean up inline styles after animation
+                    setTimeout(() => {
+                        cardEl.style.transition = '';
+                        cardEl.style.transform = '';
+                        cardEl.style.opacity = '';
+                    }, totalDelay + 500);
+                }
             }
         });
     }
@@ -420,23 +519,59 @@ class MusController {
             this.elements.barEllos.style.width = `${(piedras.equipo2 / 40) * 100}%`;
         }
 
-        // Visual piedras (stones)
-        this._renderPiedrasVisual(this.elements.piedrasVisualNosotros, piedras.equipo1);
-        this._renderPiedrasVisual(this.elements.piedrasVisualEllos, piedras.equipo2);
+        // Tantos: jugador=piedras nosotros, pareja=amarrakos nosotros
+        //         rival2=piedras ellos, rival1=amarrakos ellos
+        const aN = Math.floor(piedras.equipo1 / 5);
+        const pN = piedras.equipo1 % 5;
+        const aE = Math.floor(piedras.equipo2 / 5);
+        const pE = piedras.equipo2 % 5;
+
+        this._renderTantos(this.elements.tantosJugador, pN, 'piedra');
+        this._renderTantos(this.elements.tantosPareja, aN, 'amarrako');
+        this._renderTantos(this.elements.tantosRival2, pE, 'piedra');
+        this._renderTantos(this.elements.tantosRival1, aE, 'amarrako');
     }
 
-    _renderPiedrasVisual(container, count) {
+    // Natural scatter positions: triangle, square, etc.
+    _getTantoPositions(count, type) {
+        const s = type === 'piedra' ? 9 : 11; // stone size
+        const positions = {
+            piedra: {
+                1: [[15, 15]],
+                2: [[8, 15], [22, 15]],
+                3: [[15, 8], [8, 22], [22, 22]],
+                4: [[8, 8], [22, 8], [8, 22], [22, 22]],
+            },
+            amarrako: {
+                1: [[14, 12]],
+                2: [[7, 12], [21, 12]],
+                3: [[14, 4], [6, 20], [22, 20]],
+                4: [[6, 4], [22, 4], [6, 20], [22, 20]],
+                5: [[14, 2], [4, 14], [24, 14], [8, 26], [20, 26]],
+                6: [[6, 2], [22, 2], [4, 16], [24, 16], [8, 28], [20, 28]],
+                7: [[14, 0], [4, 10], [24, 10], [14, 18], [4, 26], [24, 26], [14, 34]],
+                8: [[6, 0], [22, 0], [4, 12], [24, 12], [4, 24], [24, 24], [8, 34], [20, 34]],
+            }
+        };
+        return (positions[type] && positions[type][count]) || [];
+    }
+
+    _renderTantos(container, count, type) {
         if (!container) return;
         const current = container.children.length;
-        // Add new stones
-        for (let i = current; i < count; i++) {
+
+        if (current === count) return; // No change
+
+        // Full re-render for natural positioning
+        container.innerHTML = '';
+        const positions = this._getTantoPositions(count, type);
+        for (let i = 0; i < count; i++) {
             const stone = document.createElement('span');
-            stone.className = 'piedra piedra--new';
+            stone.className = `tanto tanto--${type} tanto--new`;
+            const pos = positions[i] || [15, 15];
+            stone.style.left = `${pos[0]}px`;
+            stone.style.top = `${pos[1]}px`;
             container.appendChild(stone);
-        }
-        // Remove excess stones
-        while (container.children.length > count) {
-            container.removeChild(container.lastChild);
         }
     }
 
@@ -853,8 +988,8 @@ class MusController {
     }
 
     onMusResponse(data) {
-        const status = data.wantsMus ? 'Mus' : '¡Corto!';
-        this.updatePlayerStatus(data.player, status);
+        // Status already set by processNextMusTurn / onMusClick / onCortarClick
+        // Only update if not already showing (e.g. forcemus edge cases)
     }
 
     onMusCortado(data) {
@@ -934,7 +1069,9 @@ class MusController {
                 const pares = this.game.getPares(this.game.players[playerId].hand);
                 const tienePares = pares.tipo ? 'si' : 'no';
                 this.declaracionesPares[playerId] = tienePares;
-                const text = pares.tipo ? 'Si' : 'No';
+                const text = pares.tipo
+                    ? this.randomPhrase(this.frases.paresSi)
+                    : this.randomPhrase(this.frases.paresNo);
                 speeches.push({ playerId, text });
             }
 
@@ -958,10 +1095,10 @@ class MusController {
                 const valor = this.game.getValorJuego(this.game.players[playerId].hand);
                 let text;
                 if (valor >= 31) {
-                    text = 'Sí';
+                    text = this.randomPhrase(this.frases.juegoSi);
                     this.declaracionesJuego[playerId] = 'si';
                 } else {
-                    text = 'No';
+                    text = this.randomPhrase(this.frases.juegoNo);
                     this.declaracionesJuego[playerId] = 'no';
                 }
                 speeches.push({ playerId, text });
@@ -1381,7 +1518,7 @@ class MusController {
 
         this.waitingForHuman = false;
         this.highlightSpeaker('player');
-        this.updatePlayerStatus('player', 'Mus');
+        this.updatePlayerStatus('player', this.randomPhrase(this.frases.mus));
         this.game.handleMus('player', true);
 
         // Continuar con el siguiente turno
@@ -1399,7 +1536,7 @@ class MusController {
 
         this.waitingForHuman = false;
         this.highlightSpeaker('player');
-        this.updatePlayerStatus('player', '¡Corto!');
+        this.updatePlayerStatus('player', this.randomPhrase(this.frases.cortar));
         this.game.handleMus('player', false);
     }
 
@@ -1449,29 +1586,39 @@ class MusController {
         const equipoApostador = this.game.enviteActual.equipoApostador;
         const hayApuestaPendiente = equipoApostador && equipoApostador !== playerTeam && this.game.enviteActual.apuesta > 0;
 
+        const gen = this.lanceGeneration;
+
         if (hayApuestaPendiente || this.game.ordagoActivo) {
-            this.updatePlayerStatus('player', 'No quiero');
-            this.game.handleEnvite('player', ACCIONES_ENVITE.NO_QUIERO);
+            this.updatePlayerStatus('player', this.randomPhrase(this.frases.noQuiero));
 
-            if (this.game.faseActual === FASES.ENVITE) {
-                this.turnQueue.shift();
-                const gen = this.lanceGeneration;
-                setTimeout(() => {
-                    if (this.lanceGeneration !== gen) return;
-                    this.processNextEnviteTurn();
-                }, 1000);
-            }
-        } else {
-            // Sin apuesta → PASO
-            this.updatePlayerStatus('player', 'Paso');
-            this.game.handleEnvite('player', ACCIONES_ENVITE.PASO);
-
-            this.turnQueue.shift();
-            const gen = this.lanceGeneration;
+            // Delay handleEnvite so the speech bubble stays visible before lance resolves
             setTimeout(() => {
                 if (this.lanceGeneration !== gen) return;
-                this.processNextEnviteTurn();
-            }, 1000);
+                this.game.handleEnvite('player', ACCIONES_ENVITE.NO_QUIERO);
+                this.turnQueue.shift();
+                if (this.game.faseActual === FASES.ENVITE) {
+                    setTimeout(() => {
+                        if (this.lanceGeneration !== gen) return;
+                        this.processNextEnviteTurn();
+                    }, 800);
+                }
+            }, 1200);
+        } else {
+            // Sin apuesta → PASO
+            this.updatePlayerStatus('player', this.randomPhrase(this.frases.paso));
+
+            // Delay so speech is visible
+            setTimeout(() => {
+                if (this.lanceGeneration !== gen) return;
+                this.game.handleEnvite('player', ACCIONES_ENVITE.PASO);
+                this.turnQueue.shift();
+                if (this.game.faseActual === FASES.ENVITE) {
+                    setTimeout(() => {
+                        if (this.lanceGeneration !== gen) return;
+                        this.processNextEnviteTurn();
+                    }, 800);
+                }
+            }, 1200);
         }
     }
 
@@ -1507,7 +1654,9 @@ class MusController {
         this.highlightSpeaker('player');
 
         const currentBet = this.game.enviteActual.apuesta;
-        const statusText = currentBet > 0 ? `${increment} mas!` : `Envido`;
+        const statusText = currentBet > 0
+            ? this.randomPhrase(this.frases.mas).replace('{n}', increment)
+            : this.randomPhrase(this.frases.envido);
         this.updatePlayerStatus('player', statusText);
         this.game.handleEnvite('player', ACCIONES_ENVITE.ENVIDO, increment);
 
@@ -1526,7 +1675,7 @@ class MusController {
         this.waitingForHuman = false;
         this.showButtonGroup('none');
         this.highlightSpeaker('player');
-        this.updatePlayerStatus('player', 'ORDAGO!');
+        this.updatePlayerStatus('player', this.randomPhrase(this.frases.ordago));
         this.game.handleEnvite('player', ACCIONES_ENVITE.ORDAGO);
 
         this.turnQueue.shift();
@@ -1551,8 +1700,14 @@ class MusController {
         this.waitingForHuman = false;
         this.showButtonGroup('none');
         this.highlightSpeaker('player');
-        this.updatePlayerStatus('player', '¡Quiero!');
-        this.game.handleEnvite('player', ACCIONES_ENVITE.QUIERO);
+        this.updatePlayerStatus('player', this.randomPhrase(this.frases.quiero));
+
+        // Delay handleEnvite so the speech bubble stays visible before lance resolves
+        const gen = this.lanceGeneration;
+        setTimeout(() => {
+            if (this.lanceGeneration !== gen) return;
+            this.game.handleEnvite('player', ACCIONES_ENVITE.QUIERO);
+        }, 1200);
     }
 
     // ==================== IA ====================
@@ -1583,9 +1738,7 @@ class MusController {
 
         this.game.handleDescarte(playerId, indices);
 
-        const statusText = indices.length > 0
-            ? `Cambio ${indices.length}`
-            : 'Me quedo';
+        const statusText = this.randomPhrase(this.frases[`descarte${indices.length}`] || [`Cambio ${indices.length}`]);
         this.highlightSpeaker(playerId);
         this.updatePlayerStatus(playerId, statusText);
 
@@ -1616,15 +1769,20 @@ class MusController {
     onConfirmarDescarteClick() {
         if (!this.waitingForHuman) return;
 
+        const indices = [...this.selectedCards];
+
+        // Obligatorio descartarse al menos 1 carta
+        if (indices.length === 0) {
+            this.showInfoMessage(this.frases.descarteObligatorio?.[0] || 'Debes descartarte al menos 1 carta', 2000);
+            return;
+        }
+
         this.waitingForHuman = false;
         this.showButtonGroup('none');
 
-        const indices = [...this.selectedCards];
         this.game.handleDescarte('player', indices);
 
-        const statusText = indices.length > 0
-            ? `Cambio ${indices.length}`
-            : 'Me quedo';
+        const statusText = this.randomPhrase(this.frases[`descarte${indices.length}`] || [`Cambio ${indices.length}`]);
         this.highlightSpeaker('player');
         this.updatePlayerStatus('player', statusText);
 

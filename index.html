@@ -46,7 +46,7 @@
 
         <!-- Mesa de juego -->
         <main class="game-table">
-            <!-- Jugador Pareja (arriba) -->
+            <!-- Jugador Pareja (arriba) - lleva amarrakos de Nosotros -->
             <section class="player-area player-area--top player-area--pareja">
                 <div class="player-info">
                     <span class="player-avatar">🤝</span>
@@ -59,9 +59,10 @@
                     <div class="card card--back" data-position="2"></div>
                     <div class="card card--back" data-position="3"></div>
                 </div>
+                <div class="tantos-container tantos--pareja tantos--nosotros" id="tantos-pareja"></div>
             </section>
 
-            <!-- Jugador Rival 1 (izquierda) -->
+            <!-- Jugador Rival 1 (izquierda) - lleva amarrakos de Ellos -->
             <section class="player-area player-area--left player-area--rival1">
                 <div class="player-info">
                     <span class="player-avatar">😈</span>
@@ -74,6 +75,7 @@
                     <div class="card card--back" data-position="2"></div>
                     <div class="card card--back" data-position="3"></div>
                 </div>
+                <div class="tantos-container tantos--rival1 tantos--ellos" id="tantos-rival1"></div>
             </section>
 
             <!-- Zona central -->
@@ -99,7 +101,7 @@
                 </div>
             </section>
 
-            <!-- Jugador Rival 2 (derecha) -->
+            <!-- Jugador Rival 2 (derecha) - lleva piedras de Ellos -->
             <section class="player-area player-area--right player-area--rival2">
                 <div class="player-info">
                     <span class="player-avatar">👹</span>
@@ -112,9 +114,10 @@
                     <div class="card card--back" data-position="2"></div>
                     <div class="card card--back" data-position="3"></div>
                 </div>
+                <div class="tantos-container tantos--rival2 tantos--ellos" id="tantos-rival2"></div>
             </section>
 
-            <!-- Jugador Principal (abajo) -->
+            <!-- Jugador Principal (abajo) - lleva piedras de Nosotros -->
             <section class="player-area player-area--bottom player-area--jugador">
                 <div class="player-hand" id="mano-jugador">
                     <div class="card card--selectable" data-position="0" id="carta-jugador-0"></div>
@@ -127,7 +130,17 @@
                     <span class="player-name">Jugador</span>
                     <span class="player-status" id="status-jugador"></span>
                 </div>
+                <div class="tantos-container tantos--jugador tantos--nosotros" id="tantos-jugador"></div>
             </section>
+
+            <!-- Baraja (se mueve al lado del mano) -->
+            <div class="deck-area" id="deck-area">
+                <div class="deck-stack" id="deck-stack">
+                    <div class="deck-card"><img src="modelos/reverso.png" alt="Baraja" draggable="false"></div>
+                    <div class="deck-card"><img src="modelos/reverso.png" alt="Baraja" draggable="false"></div>
+                    <div class="deck-card"><img src="modelos/reverso.png" alt="Baraja" draggable="false"></div>
+                </div>
+            </div>
         </main>
 
         <!-- Panel de controles -->

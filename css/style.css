@@ -15,21 +15,32 @@ html, body {
 
 body {
     font-family: 'Exo 2', 'Segoe UI', Arial, sans-serif;
-    background: radial-gradient(ellipse at center, #1a5f2a 0%, #0d3d16 70%, #071f0b 100%);
+    background: #1b6b2e;
     color: #f0f0f0;
     position: relative;
 }
 
-/* Felt/tapete texture overlay with noise */
+/* Felt/tapete texture - realistic green felt with noise grain */
 body::before {
     content: '';
     position: fixed;
     inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
-    background-size: 256px 256px;
+    background:
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+        radial-gradient(ellipse at 50% 50%, rgba(40,130,60,0.3) 0%, transparent 70%);
+    background-size: 200px 200px, 100% 100%;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.6;
+}
+
+/* Subtle vignette for depth */
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.35) 100%);
+    pointer-events: none;
+    z-index: 0;
 }
 
 /* ===== CONTENEDOR PRINCIPAL ===== */
@@ -437,24 +448,7 @@ body::before {
     outline: 2px solid #66BB6A;
 }
 
-/* Deal animation: cards fly in from center */
-.card--dealing {
-    opacity: 0;
-    transform: scale(0.3) rotate(15deg);
-    transition: none;
-}
-
-.card--deal-animate {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-    transition: opacity 0.35s ease-out, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Lateral dealing rotation override */
-.player-area--left .card--deal-animate,
-.player-area--right .card--deal-animate {
-    transform: rotate(90deg);
-}
+/* Deal animation handled via inline JS (cards fly from deck) */
 
 /* ===== PANEL DE CONTROLES ===== */
 .controls-panel {
@@ -709,42 +703,134 @@ body::before {
     gap: 15px;
 }
 
-/* ===== PIEDRAS VISUALES ===== */
-.piedras-visual {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2px;
-    justify-content: center;
-    max-width: 90px;
-    min-height: 10px;
-    margin: 2px auto 0;
+/* ===== TANTOS (piedras/amarrakos near players) ===== */
+.tantos-container {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    pointer-events: none;
+    z-index: 3;
 }
 
-.piedra {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    display: inline-block;
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+/* Jugador (bottom): tantos a la IZQUIERDA de sus cartas */
+.tantos--jugador {
+    left: -46px;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
-.piedra--new {
-    animation: piedraAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+/* Pareja (top): tantos a la DERECHA de sus cartas */
+.tantos--pareja {
+    right: -46px;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
-@keyframes piedraAppear {
+/* Rival1 (left): tantos DEBAJO de sus cartas */
+.tantos--rival1 {
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Rival2 (right): tantos DEBAJO de sus cartas */
+.tantos--rival2 {
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Individual stone - positioned absolutely for natural scatter */
+.tanto {
+    position: absolute;
+    display: block;
+}
+
+.tanto--new {
+    animation: tantoAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tantoAppear {
     0% { transform: scale(0); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
 }
 
-.score-team--nosotros .piedra {
-    background: radial-gradient(circle at 30% 30%, #81C784, #388E3C);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.3);
+/* Piedra (value 1) - small round stone */
+.tanto--piedra {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
 }
 
-.score-team--ellos .piedra {
-    background: radial-gradient(circle at 30% 30%, #EF9A9A, #C62828);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.3);
+/* Amarrako (value 5) - larger rectangular token */
+.tanto--amarrako {
+    width: 11px;
+    height: 15px;
+    border-radius: 3px;
+}
+
+/* Nosotros team colors (jugador piedras, pareja amarrakos) */
+.tantos--nosotros .tanto--piedra {
+    background: radial-gradient(circle at 35% 35%, #a8d5a0, #2e7d32);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.35);
+}
+
+.tantos--nosotros .tanto--amarrako {
+    background: linear-gradient(135deg, #81C784, #1B5E20);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+}
+
+/* Ellos team colors (rival2 piedras, rival1 amarrakos) */
+.tantos--ellos .tanto--piedra {
+    background: radial-gradient(circle at 35% 35%, #ef9a9a, #b71c1c);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.35);
+}
+
+.tantos--ellos .tanto--amarrako {
+    background: linear-gradient(135deg, #EF5350, #8B0000);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+}
+
+/* ===== BARAJA VISIBLE (deck) ===== */
+.deck-area {
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.deck-stack {
+    position: relative;
+    width: 42px;
+    height: 62px;
+}
+
+/* Stacked card backs for 3D depth */
+.deck-card {
+    position: absolute;
+    width: 42px;
+    height: 62px;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+}
+
+.deck-card img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.deck-card:nth-child(1) { top: 0; left: 0; }
+.deck-card:nth-child(2) { top: -1px; left: 1px; }
+.deck-card:nth-child(3) { top: -2px; left: 2px; }
+
+/* Old piedras-visual in scoreboard - hide, replaced by tapete tantos */
+.piedras-visual {
+    display: none;
 }
 
 /* ===== PARTICULAS ===== */
@@ -969,15 +1055,12 @@ body::before {
         font-size: 11px;
     }
 
-    /* Piedras visual smaller */
-    .piedras-visual {
-        max-width: 70px;
-    }
-
-    .piedra {
-        width: 5px;
-        height: 5px;
-    }
+    /* Tantos smaller on mobile */
+    .tantos-container { width: 30px; height: 30px; }
+    .tanto--piedra { width: 7px; height: 7px; }
+    .tanto--amarrako { width: 9px; height: 12px; }
+    .deck-stack { width: 34px; height: 50px; }
+    .deck-card { width: 34px; height: 50px; }
 
     /* Central glow smaller */
     .table-center::before {
@@ -1060,6 +1143,12 @@ body::before {
         font-size: 10px;
         padding: 2px 8px;
     }
+
+    .tantos-container { width: 25px; height: 25px; }
+    .tanto--piedra { width: 6px; height: 6px; }
+    .tanto--amarrako { width: 7px; height: 10px; }
+    .deck-stack { width: 28px; height: 42px; }
+    .deck-card { width: 28px; height: 42px; }
 }
 
 /* ===== LANDSCAPE MOBILE ===== */
@@ -1117,6 +1206,9 @@ body::before {
         font-size: 10px;
         min-height: 30px;
     }
+
+    .deck-stack { width: 30px; height: 44px; }
+    .deck-card { width: 30px; height: 44px; }
 }
 
 /* ===== SHORT DESKTOP ===== */

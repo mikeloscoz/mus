@@ -499,11 +499,6 @@ export class AIPlayer {
         const pares = this._detectarPares(hand);
         const puntos = this._calcularPuntos(hand);
 
-        // Nunca descartar con duples, medias buenas o 31
-        if (pares.tipo === 'duples') return [];
-        if (pares.tipo === 'medias' && pares.fuerza >= 60) return [];
-        if (puntos === 31) return [];
-
         // Identificar cartas que son parte de pares
         const conteo = {};
         hand.forEach(c => {
@@ -547,20 +542,25 @@ export class AIPlayer {
         // Ordenar por valor (menor = descartar primero)
         analisis.sort((a, b) => a.valor - b.valor);
 
-        // Decidir cuántas descartar
+        // Decidir cuántas descartar (mínimo 1 obligatorio en mus)
         const fuerzaMano = this._evaluarManoGeneral(hand);
-        let numDescartar = 0;
+        let numDescartar = 1;
         if (fuerzaMano < 20) numDescartar = 3;
         else if (fuerzaMano < 30) numDescartar = 2;
         else if (fuerzaMano < 45) numDescartar = 1;
 
-        // No descartar cartas de pares
+        // No descartar cartas de pares (preferir otras)
         const descartar = [];
         for (const a of analisis) {
             if (descartar.length >= numDescartar) break;
             if (!a.esPar) {
                 descartar.push(a.card);
             }
+        }
+
+        // Obligatorio descartarse al menos 1: si no encontramos ninguna no-par, forzar la peor
+        if (descartar.length === 0 && analisis.length > 0) {
+            descartar.push(analisis[0].card);
         }
 
         return descartar;

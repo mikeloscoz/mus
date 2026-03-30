@@ -697,34 +697,34 @@ describe('AIPlayer - Discard', () => {
     let ai;
     beforeEach(() => { ai = new AIPlayer(); });
 
-    it('should not discard with duples', () => {
+    it('should discard minimum 1 even with duples (mus rule)', () => {
         const hand = [
             { rank: 'K', suit: 'oros' },
             { rank: 'K', suit: 'copas' },
             { rank: 'K', suit: 'espadas' },
             { rank: 'K', suit: 'bastos' }
         ];
-        expect(ai.selectDiscard(hand)).toHaveLength(0);
+        expect(ai.selectDiscard(hand).length).toBeGreaterThanOrEqual(1);
     });
 
-    it('should not discard with 31 juego', () => {
+    it('should discard minimum 1 even with 31 juego (mus rule)', () => {
         const hand = [
             { rank: 'K', suit: 'oros' },
             { rank: 'K', suit: 'copas' },
             { rank: 'K', suit: 'espadas' },
             { rank: 'A', suit: 'bastos' }
         ];
-        expect(ai.selectDiscard(hand)).toHaveLength(0);
+        expect(ai.selectDiscard(hand).length).toBeGreaterThanOrEqual(1);
     });
 
-    it('should not discard with 3+ aces (chica hand)', () => {
+    it('should discard minimum 1 even with 3+ aces (mus rule)', () => {
         const hand = [
             { rank: 'A', suit: 'oros' },
             { rank: 'A', suit: 'copas' },
             { rank: 'A', suit: 'espadas' },
             { rank: '7', suit: 'bastos' }
         ];
-        expect(ai.selectDiscard(hand)).toHaveLength(0);
+        expect(ai.selectDiscard(hand).length).toBeGreaterThanOrEqual(1);
     });
 
     it('should never discard cards that are part of a pair', () => {
@@ -841,24 +841,24 @@ describe('AIPlayer - Descarte Mejorado', () => {
         }
     });
 
-    it('selectDiscard should not discard with duples', () => {
+    it('selectDiscard should discard minimum 1 even with duples (mus rule)', () => {
         const hand = [
             { rank: 'K', suit: 'oros' },
             { rank: 'K', suit: 'copas' },
             { rank: '3', suit: 'espadas' },
             { rank: '3', suit: 'bastos' }
         ];
-        expect(ai.selectDiscard(hand)).toHaveLength(0);
+        expect(ai.selectDiscard(hand).length).toBeGreaterThanOrEqual(1);
     });
 
-    it('selectDiscard should not discard with 31', () => {
+    it('selectDiscard should discard minimum 1 even with 31 (mus rule)', () => {
         const hand = [
             { rank: 'K', suit: 'oros' },
             { rank: 'Q', suit: 'copas' },
             { rank: 'J', suit: 'espadas' },
             { rank: 'A', suit: 'bastos' }
         ];
-        expect(ai.selectDiscard(hand)).toHaveLength(0);
+        expect(ai.selectDiscard(hand).length).toBeGreaterThanOrEqual(1);
     });
 });
 
