@@ -2,6 +2,7 @@
 .claude
 iawot-plans/
 templates/
+CLAUDE.md
 
 # Dependencias
 node_modules/
